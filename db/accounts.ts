@@ -1,11 +1,15 @@
 import { Account, db, generateId } from "./schema";
+import { recordSyncDelete } from "./syncDeletes";
 
-export type NewAccountInput = Omit<Account, "id">;
+export type NewAccountInput = Omit<Account, "id" | "createdAt" | "updatedAt">;
 
 export async function addAccount(input: NewAccountInput): Promise<Account> {
+  const now = new Date().toISOString();
   const account: Account = {
     ...input,
     id: generateId(),
+    createdAt: now,
+    updatedAt: now,
   };
 
   await db.accounts.add(account);
@@ -28,6 +32,7 @@ export async function updateAccount(
   if ("type" in updates && updates.type) {
     updateData.type = updates.type;
   }
+  updateData.updatedAt = new Date().toISOString();
 
   const updated = await db.accounts.update(id, updateData);
   return updated > 0;
@@ -35,6 +40,7 @@ export async function updateAccount(
 
 export async function deleteAccount(id: string): Promise<void> {
   await db.accounts.delete(id);
+  await recordSyncDelete("accounts", id);
 }
 
 export async function listAccounts(): Promise<Account[]> {

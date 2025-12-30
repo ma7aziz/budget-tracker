@@ -20,24 +20,24 @@ export function ProgressBar({
   const percentage = max > 0 ? Math.min((current / max) * 100, 100) : 0;
   
   const colorClasses = {
-    default: "bg-primary-600",
-    warning: "bg-yellow-500",
-    danger: "bg-red-600",
+    default: "bg-[var(--accent)]",
+    warning: "bg-[var(--warning)]",
+    danger: "bg-[var(--danger)]",
   };
   
   const bgColorClasses = {
-    default: "bg-primary-100",
-    warning: "bg-yellow-100",
-    danger: "bg-red-100",
+    default: "bg-[var(--accent-soft)]",
+    warning: "bg-[var(--warning-soft)]",
+    danger: "bg-[var(--danger-soft)]",
   };
   
   return (
     <div className={`w-full ${className}`}>
       {(label || showPercentage) && (
         <div className="flex items-center justify-between mb-1 text-sm">
-          {label && <span className="font-medium text-gray-700">{label}</span>}
+          {label && <span className="font-medium text-[var(--muted)]">{label}</span>}
           {showPercentage && (
-            <span className="text-gray-600">{percentage.toFixed(0)}%</span>
+            <span className="text-[var(--muted)]">{percentage.toFixed(0)}%</span>
           )}
         </div>
       )}

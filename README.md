@@ -37,6 +37,26 @@ The app is offline-first and defaults to IndexedDB storage. The data provider ca
 
 - Local (default): `NEXT_PUBLIC_DATA_PROVIDER=local`
 - Remote (stub): `NEXT_PUBLIC_DATA_PROVIDER=remote`
+- Supabase (sync): `NEXT_PUBLIC_DATA_PROVIDER=supabase`
+
+## Supabase Setup
+
+1. Create a Supabase project and run the SQL in `supabase/schema.sql`.
+2. Copy the project URL + anon key into `.env.local`:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+NEXT_PUBLIC_DATA_PROVIDER=supabase
+```
+
+3. Start the app and visit `/auth` to sign in or create an account.
+
+## Migration Notes (Local → Supabase)
+
+- Local IndexedDB data is preserved.
+- On login, local data is merged into Supabase and remote updates are pulled down.
+- If you log out, local data stays intact and the app continues to work offline.
 
 ## PWA Notes
 

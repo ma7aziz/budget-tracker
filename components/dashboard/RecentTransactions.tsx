@@ -18,15 +18,15 @@ export function RecentTransactions({
   if (transactions.length === 0) {
     return (
       <Card>
-        <p className="text-center text-gray-500 py-8">No recent transactions</p>
+        <p className="text-center text-gray-500 dark:text-gray-400 py-8">No recent transactions</p>
       </Card>
     );
   }
 
   return (
     <Card>
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Transactions</h3>
-      <div className="space-y-3">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Recent Transactions</h3>
+      <div className="space-y-2">
         {transactions.map((transaction) => {
           const categoryName = categories.get(transaction.categoryId) || "Uncategorized";
           const isExpense = transaction.type === "expense";
@@ -35,13 +35,13 @@ export function RecentTransactions({
             <div
               key={transaction.id}
               onClick={() => onTransactionClick?.(transaction)}
-              className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors"
+              className="flex items-center justify-between p-3 hover:bg-[var(--surface-strong)] rounded-xl cursor-pointer transition-all active:scale-[0.98]"
             >
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-gray-900 truncate">
+                <p className="font-medium text-gray-900 dark:text-gray-100 truncate">
                   {transaction.merchant || categoryName}
                 </p>
-                <div className="flex items-center gap-2 text-sm text-gray-500">
+                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                   <span>{formatDate(transaction.date)}</span>
                   {transaction.merchant && (
                     <>
@@ -51,7 +51,7 @@ export function RecentTransactions({
                   )}
                 </div>
               </div>
-              <div className={`font-semibold ${isExpense ? "text-red-600" : "text-green-600"}`}>
+              <div className={`font-semibold ${isExpense ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
                 {isExpense ? "-" : "+"}{formatCents(transaction.amountCents)}
               </div>
             </div>

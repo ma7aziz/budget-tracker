@@ -1,14 +1,19 @@
 "use client";
 
 import { useState, useEffect, FormEvent, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { LoadingScreen } from "@/components/ui/Loading";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { Plus, X, Download, Upload, Trash2 } from "lucide-react";
-import { getDataProvider } from "@/services/dataProvider";
+import { getDataProvider, getDefaultDataProviderKind } from "@/services/dataProvider";
 import { Category, Account, AccountType } from "@/db/schema";
+import { syncAll } from "@/services/supabaseSync";
+import { isSupabaseConfigured } from "@/services/supabaseClient";
+import { getCurrentSession, signOut } from "@/services/supabaseAuth";
 
 const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: "cash", label: "Cash" },
@@ -18,6 +23,7 @@ const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
 ];
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -29,6 +35,8 @@ export default function SettingsPage() {
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [newAccountName, setNewAccountName] = useState("");
   const [newAccountType, setNewAccountType] = useState<AccountType>("bank");
+  const [syncing, setSyncing] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -40,6 +48,12 @@ export default function SettingsPage() {
     try {
       setLoading(true);
       const provider = getDataProvider();
+      if (isSupabaseConfigured() && getDefaultDataProviderKind() === "supabase") {
+        const session = await getCurrentSession();
+        setUserEmail(session?.user?.email ?? null);
+      } else {
+        setUserEmail(null);
+      }
       
       const [cats, accs] = await Promise.all([
         provider.categories.list(),
@@ -180,7 +194,9 @@ export default function SettingsPage() {
       const provider = getDataProvider();
       const report = await provider.importJson(data);
       
-      alert(`Import completed!\nTransactions: ${report.transactionsAdded}\nCategories: ${report.categoriesAdded}\nBudgets: ${report.budgetsAdded}\nAccounts: ${report.accountsAdded}`);
+      alert(
+        `Import completed!\nTransactions: ${report.transactionsAdded}\nCategories: ${report.categoriesAdded}\nBudgets: ${report.budgetsAdded}\nMonthly Budgets: ${report.monthlyBudgetsAdded}\nAccounts: ${report.accountsAdded}`
+      );
       
       await loadSettings();
     } catch (error) {
@@ -206,10 +222,11 @@ export default function SettingsPage() {
       const provider = getDataProvider();
       
       // Delete all data
-      const [txs, cats, buds, accs] = await Promise.all([
+      const [txs, cats, buds, monthlyBuds, accs] = await Promise.all([
         provider.transactions.list(),
         provider.categories.list(),
         provider.budgets.list(),
+        provider.monthlyBudgets.list(),
         provider.accounts.list(),
       ]);
       
@@ -217,6 +234,7 @@ export default function SettingsPage() {
         ...txs.map((tx) => provider.transactions.delete(tx.id)),
         ...cats.map((cat) => provider.categories.delete(cat.id)),
         ...buds.map((bud) => provider.budgets.delete(bud.id)),
+        ...monthlyBuds.map((bud) => provider.monthlyBudgets.delete(bud.id)),
         ...accs.map((acc) => provider.accounts.delete(acc.id)),
       ]);
       
@@ -228,18 +246,72 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleManualSync() {
+    setSyncing(true);
+    try {
+      await syncAll();
+    } catch (error) {
+      console.error("Failed to sync:", error);
+      alert("Sync failed. Please try again.");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function handleSignOut() {
+    try {
+      await signOut();
+      setUserEmail(null);
+      router.replace("/auth");
+    } catch (error) {
+      console.error("Failed to sign out:", error);
+      alert("Sign out failed. Please try again.");
+    }
+  }
+
   if (loading) {
     return <LoadingScreen />;
   }
+
+  const canSync = isSupabaseConfigured() && getDefaultDataProviderKind() === "supabase";
 
   return (
     <AppLayout>
       <div className="space-y-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Settings</h2>
-          <p className="text-gray-600">Manage categories, accounts, and data</p>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Settings</h2>
+          <p className="text-gray-600 dark:text-gray-400">Manage categories, accounts, and data</p>
         </div>
         
+        {/* Theme Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Appearance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ThemeToggle />
+          </CardContent>
+        </Card>
+        
+        {canSync && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Account</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                Signed in as {userEmail ?? "Unknown user"}
+              </p>
+              <p className="text-xs text-gray-500">Sync runs automatically when you are online.</p>
+              <div className="mt-3">
+                <Button variant="secondary" onClick={handleSignOut}>
+                  Sign Out
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Categories */}
         <Card>
           <CardHeader>
@@ -255,7 +327,7 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             {showAddCategory && (
-              <form onSubmit={handleAddCategory} className="mb-4 p-4 bg-gray-50 rounded-lg space-y-3">
+              <form onSubmit={handleAddCategory} className="mb-4 p-4 bg-[var(--surface-strong)] border border-[var(--border)] rounded-xl space-y-3">
                 <Input
                   label="Category Name"
                   value={newCategoryName}
@@ -264,14 +336,14 @@ export default function SettingsPage() {
                   autoFocus
                 />
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Color
                   </label>
                   <input
                     type="color"
                     value={newCategoryColor}
                     onChange={(e) => setNewCategoryColor(e.target.value)}
-                    className="h-10 w-20 rounded cursor-pointer"
+                    className="h-10 w-20 rounded-xl cursor-pointer"
                   />
                 </div>
                 <div className="flex gap-2">
@@ -290,13 +362,13 @@ export default function SettingsPage() {
             
             <div className="space-y-2">
               {categories.map((cat) => (
-                <div key={cat.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div key={cat.id} className="flex items-center justify-between p-3 bg-[var(--surface-strong)] border border-[var(--border)] rounded-xl">
                   <div className="flex items-center gap-3">
                     <div
                       className="w-4 h-4 rounded-full"
                       style={{ backgroundColor: cat.color || "#cccccc" }}
                     />
-                    <span className="font-medium text-gray-900">{cat.name}</span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">{cat.name}</span>
                   </div>
                   <Button
                     variant="ghost"
@@ -309,7 +381,7 @@ export default function SettingsPage() {
               ))}
               
               {categories.length === 0 && !showAddCategory && (
-                <p className="text-center text-gray-500 py-4">No categories yet</p>
+                <p className="text-center text-gray-500 dark:text-gray-400 py-4">No categories yet</p>
               )}
             </div>
           </CardContent>
@@ -330,7 +402,7 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             {showAddAccount && (
-              <form onSubmit={handleAddAccount} className="mb-4 p-4 bg-gray-50 rounded-lg space-y-3">
+              <form onSubmit={handleAddAccount} className="mb-4 p-4 bg-[var(--surface-strong)] border border-[var(--border)] rounded-xl space-y-3">
                 <Input
                   label="Account Name"
                   value={newAccountName}
@@ -339,13 +411,13 @@ export default function SettingsPage() {
                   autoFocus
                 />
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-[var(--muted)] mb-1">
                     Account Type
                   </label>
                   <select
                     value={newAccountType}
                     onChange={(e) => setNewAccountType(e.target.value as AccountType)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="w-full px-3 py-2 border border-[var(--border)] rounded-xl bg-[var(--surface)] text-[var(--ink)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent transition-colors"
                   >
                     {ACCOUNT_TYPES.map((type) => (
                       <option key={type.value} value={type.value}>
@@ -370,10 +442,10 @@ export default function SettingsPage() {
             
             <div className="space-y-2">
               {accounts.map((acc) => (
-                <div key={acc.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div key={acc.id} className="flex items-center justify-between p-3 bg-[var(--surface-strong)] border border-[var(--border)] rounded-xl">
                   <div>
-                    <p className="font-medium text-gray-900">{acc.name}</p>
-                    <p className="text-sm text-gray-500 capitalize">{acc.type}</p>
+                    <p className="font-medium text-gray-900 dark:text-gray-100">{acc.name}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{acc.type}</p>
                   </div>
                   <Button
                     variant="ghost"
@@ -386,7 +458,7 @@ export default function SettingsPage() {
               ))}
               
               {accounts.length === 0 && !showAddAccount && (
-                <p className="text-center text-gray-500 py-4">No accounts yet</p>
+                <p className="text-center text-gray-500 dark:text-gray-400 py-4">No accounts yet</p>
               )}
             </div>
           </CardContent>
@@ -399,22 +471,33 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
+              {canSync && (
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                    Cloud sync runs automatically in the background
+                  </p>
+                  <Button variant="secondary" onClick={handleManualSync} disabled={syncing}>
+                    {syncing ? "Syncing..." : "Sync Now"}
+                  </Button>
+                </div>
+              )}
+
               <div>
-                <p className="text-sm text-gray-600 mb-2">Export your data for backup or analysis</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Export your data for backup or analysis</p>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="secondary" onClick={handleExportJson}>
-                    <Download size={16} className="mr-2" />
+                    <Download size={16} />
                     Export JSON
                   </Button>
                   <Button variant="secondary" onClick={handleExportCsv}>
-                    <Download size={16} className="mr-2" />
+                    <Download size={16} />
                     Export CSV
                   </Button>
                 </div>
               </div>
               
-              <div className="border-t pt-3">
-                <p className="text-sm text-gray-600 mb-2">Import data from a backup file</p>
+              <div className="border-t border-[var(--border)] pt-3">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Import data from a backup file</p>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -426,17 +509,17 @@ export default function SettingsPage() {
                   variant="secondary"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <Upload size={16} className="mr-2" />
+                  <Upload size={16} />
                   Import JSON
                 </Button>
               </div>
               
-              <div className="border-t pt-3">
-                <p className="text-sm text-red-600 mb-2 font-medium">
+              <div className="border-t border-[var(--border)] pt-3">
+                <p className="text-sm text-red-600 dark:text-red-400 mb-2 font-medium">
                   Danger Zone: This action cannot be undone
                 </p>
                 <Button variant="danger" onClick={handleResetData}>
-                  <Trash2 size={16} className="mr-2" />
+                  <Trash2 size={16} />
                   Delete All Data
                 </Button>
               </div>

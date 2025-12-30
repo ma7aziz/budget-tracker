@@ -3,6 +3,7 @@ import type {
   TransactionRepository,
   CategoryRepository,
   BudgetRepository,
+  MonthlyBudgetRepository,
   AccountRepository,
   SettingsRepository,
 } from "./dataProvider";
@@ -47,6 +48,17 @@ const makeBudgets = (): BudgetRepository => ({
   listForMonth: (monthKey) => notImplemented(`budgets.listForMonth:${monthKey}`),
 });
 
+const makeMonthlyBudgets = (): MonthlyBudgetRepository => ({
+  add: () => notImplemented("monthlyBudgets.add"),
+  get: (id) => notImplemented(`monthlyBudgets.get:${id}`),
+  getForMonth: (monthKey) => notImplemented(`monthlyBudgets.getForMonth:${monthKey}`),
+  upsertForMonth: (monthKey) => notImplemented(`monthlyBudgets.upsertForMonth:${monthKey}`),
+  update: (id) => notImplemented(`monthlyBudgets.update:${id}`),
+  delete: (id) => notImplemented(`monthlyBudgets.delete:${id}`),
+  list: () => notImplemented("monthlyBudgets.list"),
+  listForMonth: (monthKey) => notImplemented(`monthlyBudgets.listForMonth:${monthKey}`),
+});
+
 const makeAccounts = (): AccountRepository => ({
   add: () => notImplemented("accounts.add"),
   get: (id) => notImplemented(`accounts.get:${id}`),
@@ -67,6 +79,7 @@ export function createRemoteDataProvider(): DataProvider {
     transactions: makeTransactions(),
     categories: makeCategories(),
     budgets: makeBudgets(),
+    monthlyBudgets: makeMonthlyBudgets(),
     accounts: makeAccounts(),
     settings: makeSettings(),
     exportJson: () => notImplemented<ExportPayload>("exportJson"),

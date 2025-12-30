@@ -1,18 +1,22 @@
-import { ReactNode } from "react";
+import { ReactNode, CSSProperties } from "react";
 
 export interface CardProps {
   children: ReactNode;
   className?: string;
   onClick?: () => void;
+  style?: CSSProperties;
 }
 
-export function Card({ children, className = "", onClick }: CardProps) {
-  const clickable = onClick ? "cursor-pointer hover:shadow-md transition-shadow" : "";
+export function Card({ children, className = "", onClick, style }: CardProps) {
+  const clickable = onClick
+    ? "cursor-pointer hover:shadow-[var(--shadow)] active:scale-[0.98] transition-all"
+    : "";
   
   return (
     <div
       onClick={onClick}
-      className={`bg-white rounded-lg shadow p-4 ${clickable} ${className}`}
+      style={style}
+      className={`bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-[var(--shadow-soft)] p-4 transition-colors ${clickable} ${className}`}
     >
       {children}
     </div>
@@ -39,7 +43,7 @@ export interface CardTitleProps {
 
 export function CardTitle({ children, className = "" }: CardTitleProps) {
   return (
-    <h3 className={`text-lg font-semibold text-gray-900 ${className}`}>
+    <h3 className={`text-lg font-semibold font-display text-[var(--ink)] ${className}`}>
       {children}
     </h3>
   );

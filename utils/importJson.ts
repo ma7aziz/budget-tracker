@@ -3,6 +3,7 @@ import {
   Account,
   Budget,
   Category,
+  MonthlyBudget,
   db,
   SCHEMA_VERSION,
   Settings,
@@ -17,6 +18,7 @@ export interface ImportReport {
   transactionsAdded: number;
   categoriesAdded: number;
   budgetsAdded: number;
+  monthlyBudgetsAdded: number;
   accountsAdded: number;
   settingsUpdated: boolean;
 }
@@ -84,6 +86,15 @@ const validateBudget = (budget: Budget): void => {
   );
 };
 
+const validateMonthlyBudget = (budget: MonthlyBudget): void => {
+  assertCondition(isNonEmptyString(budget.id), "Monthly budget id is required.");
+  assertCondition(isValidMonthKey(budget.month), "Monthly budget month is invalid.");
+  assertCondition(
+    isInteger(budget.limitCents) && budget.limitCents >= 0,
+    "Monthly budget limitCents must be a non-negative integer."
+  );
+};
+
 const validateAccount = (account: Account): void => {
   assertCondition(isNonEmptyString(account.id), "Account id is required.");
   assertCondition(isNonEmptyString(account.name), "Account name is required.");
@@ -105,13 +116,19 @@ const validateSettings = (settings: Settings): void => {
 
 export const validateExportPayload = (payload: ExportPayload): void => {
   assertCondition(
-    payload.schemaVersion === SCHEMA_VERSION,
+    payload.schemaVersion <= SCHEMA_VERSION,
     `Unsupported schema version: ${payload.schemaVersion}`
   );
 
   assertCondition(Array.isArray(payload.transactions), "Transactions must be an array.");
   assertCondition(Array.isArray(payload.categories), "Categories must be an array.");
   assertCondition(Array.isArray(payload.budgets), "Budgets must be an array.");
+  const monthlyBudgets = (payload as ExportPayload & { monthlyBudgets?: MonthlyBudget[] })
+    .monthlyBudgets;
+  assertCondition(
+    Array.isArray(monthlyBudgets ?? []),
+    "Monthly budgets must be an array."
+  );
   assertCondition(Array.isArray(payload.accounts), "Accounts must be an array.");
   assertCondition(
     payload.settings !== null && typeof payload.settings === "object",
@@ -121,6 +138,7 @@ export const validateExportPayload = (payload: ExportPayload): void => {
   payload.transactions.forEach(validateTransaction);
   payload.categories.forEach(validateCategory);
   payload.budgets.forEach(validateBudget);
+  (monthlyBudgets ?? []).forEach(validateMonthlyBudget);
   payload.accounts.forEach(validateAccount);
   validateSettings(payload.settings);
 };
@@ -147,6 +165,8 @@ const addWithoutDuplicates = async <T extends { id: string }>(
 
 export async function importJson(payload: ExportPayload): Promise<ImportReport> {
   validateExportPayload(payload);
+  const normalizedMonthlyBudgets =
+    (payload as ExportPayload & { monthlyBudgets?: MonthlyBudget[] }).monthlyBudgets ?? [];
 
   return db.transaction(
     "rw",
@@ -161,6 +181,10 @@ export async function importJson(payload: ExportPayload): Promise<ImportReport> 
         payload.categories
       );
       const budgetsAdded = await addWithoutDuplicates(db.budgets, payload.budgets);
+      const monthlyBudgetsAdded = await addWithoutDuplicates(
+        db.monthlyBudgets,
+        normalizedMonthlyBudgets
+      );
       const accountsAdded = await addWithoutDuplicates(db.accounts, payload.accounts);
 
       const settingsRecord: SettingsRecord = { id: SETTINGS_ID, ...payload.settings };
@@ -170,6 +194,7 @@ export async function importJson(payload: ExportPayload): Promise<ImportReport> 
         transactionsAdded,
         categoriesAdded,
         budgetsAdded,
+        monthlyBudgetsAdded,
         accountsAdded,
         settingsUpdated: true,
       };

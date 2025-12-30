@@ -8,15 +8,16 @@ export function FloatingActionButton({ icon, className = "", ...props }: Floatin
   return (
     <button
       className={`
-        fixed bottom-6 right-6 z-50
+        fixed bottom-20 right-6 z-50 md:bottom-6
         w-14 h-14 rounded-full
-        bg-primary-600 text-white
-        shadow-lg hover:shadow-xl
-        hover:bg-primary-700
-        active:scale-95
+        bg-[var(--accent)] text-white
+        shadow-[var(--shadow-soft)] hover:shadow-[var(--shadow)]
+        hover:bg-[var(--accent-strong)]
+        active:scale-90
         transition-all duration-200
         flex items-center justify-center
-        focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2
+        focus:outline-none focus:ring-4 focus:ring-[var(--accent)] focus:ring-opacity-30
+        touch-manipulation
         ${className}
       `}
       {...props}

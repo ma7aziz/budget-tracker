@@ -1,6 +1,6 @@
 import Dexie, { Table } from "dexie";
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 3;
 
 export type TransactionType = "expense" | "income";
 
@@ -23,6 +23,8 @@ export interface Category {
   parentId: string | null;
   order: number;
   color: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Budget {
@@ -30,6 +32,16 @@ export interface Budget {
   month: string;
   categoryId: string;
   limitCents: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface MonthlyBudget {
+  id: string;
+  month: string;
+  limitCents: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type AccountType = "cash" | "bank" | "card" | "wallet";
@@ -38,6 +50,8 @@ export interface Account {
   id: string;
   name: string;
   type: AccountType;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Settings {
@@ -49,6 +63,22 @@ export interface Settings {
 
 export interface SettingsRecord extends Settings {
   id: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type SyncTable =
+  | "transactions"
+  | "categories"
+  | "budgets"
+  | "monthly_budgets"
+  | "accounts"
+  | "settings";
+
+export interface SyncDelete {
+  table: SyncTable;
+  id: string;
+  deletedAt: string;
 }
 
 export const SETTINGS_ID = "settings";
@@ -64,8 +94,10 @@ export class BudgetTrackerDB extends Dexie {
   transactions!: Table<Transaction, string>;
   categories!: Table<Category, string>;
   budgets!: Table<Budget, string>;
+  monthlyBudgets!: Table<MonthlyBudget, string>;
   accounts!: Table<Account, string>;
   settings!: Table<SettingsRecord, string>;
+  syncDeletes!: Table<SyncDelete, [string, string]>;
 
   constructor() {
     super("budget-tracker");
@@ -75,8 +107,10 @@ export class BudgetTrackerDB extends Dexie {
         "id, date, type, categoryId, accountId, [type+date], [categoryId+date], [accountId+date]",
       categories: "id, parentId, order, name",
       budgets: "id, month, categoryId, [month+categoryId]",
+      monthlyBudgets: "id, month",
       accounts: "id, type, name",
       settings: "id",
+      syncDeletes: "[table+id], table, id, deletedAt",
     });
   }
 }

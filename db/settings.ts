@@ -3,7 +3,13 @@ import { db, defaultSettings, Settings, SETTINGS_ID, SettingsRecord } from "./sc
 export async function getSettings(): Promise<Settings> {
   const record = await db.settings.get(SETTINGS_ID);
   if (!record) {
-    const newRecord: SettingsRecord = { id: SETTINGS_ID, ...defaultSettings };
+    const now = new Date().toISOString();
+    const newRecord: SettingsRecord = {
+      id: SETTINGS_ID,
+      ...defaultSettings,
+      createdAt: now,
+      updatedAt: now,
+    };
     await db.settings.put(newRecord);
     return { ...defaultSettings };
   }
@@ -14,6 +20,7 @@ export async function getSettings(): Promise<Settings> {
 
 export async function setSettings(updates: Partial<Settings>): Promise<Settings> {
   const current = await getSettings();
+  const existing = await db.settings.get(SETTINGS_ID);
   const merged: Settings = {
     currency: updates.currency ?? current.currency,
     locale: updates.locale ?? current.locale,
@@ -21,11 +28,23 @@ export async function setSettings(updates: Partial<Settings>): Promise<Settings>
     theme: updates.theme ?? current.theme,
   };
 
-  await db.settings.put({ id: SETTINGS_ID, ...merged });
+  const now = new Date().toISOString();
+  await db.settings.put({
+    id: SETTINGS_ID,
+    ...merged,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  });
   return merged;
 }
 
 export async function resetSettings(): Promise<Settings> {
-  await db.settings.put({ id: SETTINGS_ID, ...defaultSettings });
+  const now = new Date().toISOString();
+  await db.settings.put({
+    id: SETTINGS_ID,
+    ...defaultSettings,
+    createdAt: now,
+    updatedAt: now,
+  });
   return { ...defaultSettings };
 }

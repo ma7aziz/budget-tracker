@@ -8,13 +8,13 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = "primary", size = "md", fullWidth = false, className = "", disabled, children, ...props }, ref) => {
-    const baseStyles = "inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
+    const baseStyles = "inline-flex items-center justify-center gap-2 font-medium rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--bg)] border disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] touch-manipulation";
     
     const variantStyles = {
-      primary: "bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500",
-      secondary: "bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-400",
-      danger: "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500",
-      ghost: "bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-400",
+      primary: "bg-[var(--accent)] border-transparent text-white hover:bg-[var(--accent-strong)] focus:ring-[var(--accent)] shadow-[var(--shadow-soft)] hover:shadow-[var(--shadow)]",
+      secondary: "bg-[var(--surface)] border-[var(--border)] text-[var(--ink)] hover:bg-[var(--surface-strong)] focus:ring-[var(--accent)]",
+      danger: "bg-[var(--danger)] border-transparent text-white hover:brightness-95 focus:ring-[var(--danger)] shadow-[var(--shadow-soft)]",
+      ghost: "bg-transparent border-transparent text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--surface)] focus:ring-[var(--accent)]",
     };
     
     const sizeStyles = {

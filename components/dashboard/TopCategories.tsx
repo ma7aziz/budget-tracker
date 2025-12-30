@@ -25,7 +25,7 @@ export function TopCategories({ categories }: TopCategoriesProps) {
           <CardTitle>Top Categories</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-center text-gray-500 py-4">No spending data available</p>
+          <p className="text-center text-gray-500 dark:text-gray-400 py-4">No spending data available</p>
         </CardContent>
       </Card>
     );
@@ -52,14 +52,14 @@ export function TopCategories({ categories }: TopCategoriesProps) {
                         style={{ backgroundColor: category.color }}
                       />
                     )}
-                    <span className="font-medium text-gray-900">{category.categoryName}</span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">{category.categoryName}</span>
                   </div>
                   <div className="text-right">
-                    <span className="font-semibold text-gray-900">
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">
                       {formatCents(category.amountCents)}
                     </span>
                     {category.budgetCents > 0 && (
-                      <span className="text-sm text-gray-500 ml-2">
+                      <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
                         / {formatCents(category.budgetCents)}
                       </span>
                     )}

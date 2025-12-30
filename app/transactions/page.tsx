@@ -136,7 +136,7 @@ export default function TransactionsPage() {
     <AppLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">Transactions</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Transactions</h2>
         </div>
         
         <Card>
@@ -205,7 +205,7 @@ export default function TransactionsPage() {
           />
         ) : (
           <Card>
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-[var(--border)]">
               {filteredTransactions.map((tx) => {
                 const category = categoryMap.get(tx.categoryId);
                 const account = accountMap.get(tx.accountId || "");
@@ -215,7 +215,7 @@ export default function TransactionsPage() {
                   <div
                     key={tx.id}
                     onClick={() => router.push(`/transactions/${tx.id}`)}
-                    className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                    className="p-4 hover:bg-[var(--surface-strong)] cursor-pointer transition-colors"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
@@ -226,12 +226,12 @@ export default function TransactionsPage() {
                               style={{ backgroundColor: category.color }}
                             />
                           )}
-                          <p className="font-medium text-gray-900 truncate">
+                          <p className="font-medium text-gray-900 dark:text-gray-100 truncate">
                             {tx.merchant || category?.name || "Uncategorized"}
                           </p>
                         </div>
                         
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-500">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-500 dark:text-gray-400">
                           <span>{formatDate(tx.date)}</span>
                           
                           {tx.merchant && (
@@ -257,7 +257,7 @@ export default function TransactionsPage() {
                         </div>
                       </div>
                       
-                      <div className={`font-semibold whitespace-nowrap ${isExpense ? "text-red-600" : "text-green-600"}`}>
+                      <div className={`font-semibold whitespace-nowrap ${isExpense ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
                         {isExpense ? "-" : "+"}{formatCents(tx.amountCents)}
                       </div>
                     </div>

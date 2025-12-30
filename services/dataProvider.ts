@@ -1,12 +1,14 @@
-import type { Transaction, Category, Budget, Account, Settings } from "../db/schema";
+import type { Transaction, Category, Budget, MonthlyBudget, Account, Settings } from "../db/schema";
 import type { NewTransactionInput } from "../db/transactions";
 import type { ExportPayload } from "../utils/exportJson";
 import type { ImportReport } from "../utils/importJson";
 import type { CsvOptions } from "../utils/exportCsv";
 import { createLocalDataProvider } from "./localDataProvider";
 import { createRemoteDataProvider } from "./remoteDataProvider";
+import { createSupabaseDataProvider } from "./supabaseDataProvider";
+import { isSupabaseConfigured } from "./supabaseClient";
 
-export type DataProviderKind = "local" | "remote";
+export type DataProviderKind = "local" | "remote" | "supabase";
 
 export interface TransactionRepository {
   add(input: NewTransactionInput): Promise<Transaction>;
@@ -40,6 +42,17 @@ export interface BudgetRepository {
   listForMonth(monthKey: string): Promise<Budget[]>;
 }
 
+export interface MonthlyBudgetRepository {
+  add(input: Omit<MonthlyBudget, "id">): Promise<MonthlyBudget>;
+  get(id: string): Promise<MonthlyBudget | undefined>;
+  getForMonth(monthKey: string): Promise<MonthlyBudget | undefined>;
+  upsertForMonth(monthKey: string, limitCents: number): Promise<MonthlyBudget>;
+  update(id: string, updates: Partial<Omit<MonthlyBudget, "id">>): Promise<boolean>;
+  delete(id: string): Promise<void>;
+  list(): Promise<MonthlyBudget[]>;
+  listForMonth(monthKey: string): Promise<MonthlyBudget[]>;
+}
+
 export interface AccountRepository {
   add(input: Omit<Account, "id">): Promise<Account>;
   get(id: string): Promise<Account | undefined>;
@@ -59,6 +72,7 @@ export interface DataProvider {
   transactions: TransactionRepository;
   categories: CategoryRepository;
   budgets: BudgetRepository;
+  monthlyBudgets: MonthlyBudgetRepository;
   accounts: AccountRepository;
   settings: SettingsRepository;
   exportJson(): Promise<ExportPayload>;
@@ -68,8 +82,12 @@ export interface DataProvider {
 
 export function getDefaultDataProviderKind(): DataProviderKind {
   const override = process.env.NEXT_PUBLIC_DATA_PROVIDER;
-  if (override === "remote") {
-    return "remote";
+  if (override === "remote" || override === "supabase") {
+    return override;
+  }
+
+  if (isSupabaseConfigured()) {
+    return "supabase";
   }
 
   return "local";
@@ -82,6 +100,12 @@ export function getDataProvider(kind: DataProviderKind = getDefaultDataProviderK
     return cachedProvider;
   }
 
-  cachedProvider = kind === "remote" ? createRemoteDataProvider() : createLocalDataProvider();
+  if (kind === "remote") {
+    cachedProvider = createRemoteDataProvider();
+  } else if (kind === "supabase") {
+    cachedProvider = createSupabaseDataProvider();
+  } else {
+    cachedProvider = createLocalDataProvider();
+  }
   return cachedProvider;
 }

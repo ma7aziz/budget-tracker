@@ -74,6 +74,7 @@ export async function ensureDemoData(): Promise<boolean> {
   const categoryByName = new Map(categories.map((category) => [category.name, category]));
 
   const monthKey = toMonthKey(new Date());
+  await provider.monthlyBudgets.upsertForMonth(monthKey, 300000);
   const budgetPairs: Array<[string, number]> = [
     ["Housing", 120000],
     ["Groceries", 50000],

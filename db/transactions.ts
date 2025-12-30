@@ -1,5 +1,6 @@
 import { db, generateId, Transaction } from "./schema";
 import { getMonthEnd, getMonthStart, isValidDateString } from "../services/monthHelpers";
+import { recordSyncDelete } from "./syncDeletes";
 
 export type NewTransactionInput = Omit<Transaction, "id" | "createdAt" | "updatedAt">;
 
@@ -73,6 +74,7 @@ export async function updateTransaction(
 
 export async function deleteTransaction(id: string): Promise<void> {
   await db.transactions.delete(id);
+  await recordSyncDelete("transactions", id);
 }
 
 export async function listTransactions(): Promise<Transaction[]> {

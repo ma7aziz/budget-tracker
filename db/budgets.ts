@@ -1,7 +1,8 @@
 import { Budget, db, generateId } from "./schema";
+import { recordSyncDelete } from "./syncDeletes";
 import { isValidMonthKey } from "../services/monthHelpers";
 
-export type NewBudgetInput = Omit<Budget, "id">;
+export type NewBudgetInput = Omit<Budget, "id" | "createdAt" | "updatedAt">;
 
 const assertInteger = (value: number, label: string) => {
   if (!Number.isInteger(value) || value < 0) {
@@ -15,9 +16,12 @@ export async function addBudget(input: NewBudgetInput): Promise<Budget> {
   }
   assertInteger(input.limitCents, "limitCents");
 
+  const now = new Date().toISOString();
   const budget: Budget = {
     ...input,
     id: generateId(),
+    createdAt: now,
+    updatedAt: now,
   };
 
   await db.budgets.add(budget);
@@ -47,16 +51,19 @@ export async function upsertBudgetForMonth(
 
   const existing = await getBudgetForMonthCategory(monthKey, categoryId);
   if (existing) {
-    const updated: Budget = { ...existing, limitCents };
+    const updated: Budget = { ...existing, limitCents, updatedAt: new Date().toISOString() };
     await db.budgets.put(updated);
     return updated;
   }
 
+  const now = new Date().toISOString();
   const budget: Budget = {
     id: generateId(),
     month: monthKey,
     categoryId,
     limitCents,
+    createdAt: now,
+    updatedAt: now,
   };
   await db.budgets.add(budget);
   return budget;
@@ -81,6 +88,7 @@ export async function updateBudget(
     assertInteger(updates.limitCents, "limitCents");
     updateData.limitCents = updates.limitCents;
   }
+  updateData.updatedAt = new Date().toISOString();
 
   const updated = await db.budgets.update(id, updateData);
   return updated > 0;
@@ -88,6 +96,7 @@ export async function updateBudget(
 
 export async function deleteBudget(id: string): Promise<void> {
   await db.budgets.delete(id);
+  await recordSyncDelete("budgets", id);
 }
 
 export async function listBudgets(): Promise<Budget[]> {

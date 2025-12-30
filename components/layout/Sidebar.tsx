@@ -16,9 +16,9 @@ export function Sidebar() {
   const pathname = usePathname();
   
   return (
-    <aside className="hidden md:flex md:flex-col w-64 bg-white border-r border-gray-200 h-screen sticky top-0">
-      <div className="p-6 border-b border-gray-200">
-        <h1 className="text-2xl font-bold text-primary-600">Budget Tracker</h1>
+    <aside className="hidden md:flex md:flex-col w-64 bg-[var(--surface)] border-r border-[var(--border)] h-screen sticky top-0">
+      <div className="p-6 border-b border-[var(--border)]">
+        <h1 className="text-2xl font-semibold font-display text-[var(--accent)]">Budget Tracker</h1>
       </div>
       <nav className="flex-1 p-4 space-y-2">
         {navItems.map(({ href, label, icon: Icon }) => {
@@ -28,15 +28,15 @@ export function Sidebar() {
               key={href}
               href={href}
               className={`
-                flex items-center gap-3 px-4 py-3 rounded-lg
-                transition-colors font-medium
+                flex items-center gap-3 px-4 py-3 rounded-xl
+                transition-all font-medium
                 ${isActive
-                  ? "bg-primary-50 text-primary-600"
-                  : "text-gray-700 hover:bg-gray-100"
+                  ? "bg-[var(--accent-soft)] text-[var(--accent)] shadow-[var(--shadow-soft)]"
+                  : "text-[var(--muted)] hover:bg-[var(--surface-strong)] hover:text-[var(--ink)]"
                 }
               `}
             >
-              <Icon size={20} />
+              <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
               <span>{label}</span>
             </Link>
           );

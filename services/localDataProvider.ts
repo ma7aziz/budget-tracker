@@ -28,6 +28,16 @@ import {
   upsertBudgetForMonth,
 } from "../db/budgets";
 import {
+  addMonthlyBudget,
+  deleteMonthlyBudget,
+  getMonthlyBudget,
+  getMonthlyBudgetForMonth,
+  listMonthlyBudgets,
+  listMonthlyBudgetsForMonth,
+  updateMonthlyBudget,
+  upsertMonthlyBudgetForMonth,
+} from "../db/monthlyBudgets";
+import {
   addAccount,
   deleteAccount,
   getAccount,
@@ -71,6 +81,16 @@ export function createLocalDataProvider(): DataProvider {
       delete: deleteBudget,
       list: listBudgets,
       listForMonth: listBudgetsForMonth,
+    },
+    monthlyBudgets: {
+      add: addMonthlyBudget,
+      get: getMonthlyBudget,
+      getForMonth: getMonthlyBudgetForMonth,
+      upsertForMonth: upsertMonthlyBudgetForMonth,
+      update: updateMonthlyBudget,
+      delete: deleteMonthlyBudget,
+      list: listMonthlyBudgets,
+      listForMonth: listMonthlyBudgetsForMonth,
     },
     accounts: {
       add: addAccount,

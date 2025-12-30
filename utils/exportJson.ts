@@ -1,4 +1,12 @@
-import { Account, Budget, Category, db, SCHEMA_VERSION, Transaction } from "../db/schema";
+import {
+  Account,
+  Budget,
+  Category,
+  MonthlyBudget,
+  db,
+  SCHEMA_VERSION,
+  Transaction,
+} from "../db/schema";
 import { getSettings } from "../db/settings";
 import type { Settings } from "../db/schema";
 
@@ -8,15 +16,17 @@ export interface ExportPayload {
   transactions: Transaction[];
   categories: Category[];
   budgets: Budget[];
+  monthlyBudgets: MonthlyBudget[];
   accounts: Account[];
   settings: Settings;
 }
 
 export async function exportJson(): Promise<ExportPayload> {
-  const [transactions, categories, budgets, accounts, settings] = await Promise.all([
+  const [transactions, categories, budgets, monthlyBudgets, accounts, settings] = await Promise.all([
     db.transactions.toArray(),
     db.categories.toArray(),
     db.budgets.toArray(),
+    db.monthlyBudgets.toArray(),
     db.accounts.toArray(),
     getSettings(),
   ]);
@@ -27,6 +37,7 @@ export async function exportJson(): Promise<ExportPayload> {
     transactions,
     categories,
     budgets,
+    monthlyBudgets,
     accounts,
     settings,
   };

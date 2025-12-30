@@ -17,43 +17,43 @@ export function MonthlySummary({ totalIncome, totalExpenses, totalBudget }: Mont
   
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <Card>
+      <Card className="animate-slide-up">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium text-gray-600">Total Income</CardTitle>
-            <TrendingUp className="text-green-600" size={20} />
+            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Income</CardTitle>
+            <TrendingUp className="text-green-600 dark:text-green-400" size={20} />
           </div>
         </CardHeader>
         <CardContent>
-          <p className="text-2xl font-bold text-green-600">{formatCents(totalIncome)}</p>
+          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCents(totalIncome)}</p>
         </CardContent>
       </Card>
       
-      <Card>
+      <Card className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium text-gray-600">Total Expenses</CardTitle>
-            <TrendingDown className="text-red-600" size={20} />
+            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Expenses</CardTitle>
+            <TrendingDown className="text-red-600 dark:text-red-400" size={20} />
           </div>
         </CardHeader>
         <CardContent>
-          <p className="text-2xl font-bold text-red-600">{formatCents(totalExpenses)}</p>
+          <p className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCents(totalExpenses)}</p>
         </CardContent>
       </Card>
       
-      <Card>
+      <Card className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium text-gray-600">Remaining Budget</CardTitle>
-            <Wallet className={remaining >= 0 ? "text-primary-600" : "text-red-600"} size={20} />
+            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Remaining Budget</CardTitle>
+            <Wallet className={remaining >= 0 ? "text-primary-600 dark:text-primary-400" : "text-red-600 dark:text-red-400"} size={20} />
           </div>
         </CardHeader>
         <CardContent>
-          <p className={`text-2xl font-bold ${remaining >= 0 ? "text-primary-600" : "text-red-600"}`}>
+          <p className={`text-2xl font-bold ${remaining >= 0 ? "text-primary-600 dark:text-primary-400" : "text-red-600 dark:text-red-400"}`}>
             {formatCents(remaining)}
           </p>
           {totalBudget > 0 && (
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               {budgetUsedPercentage.toFixed(0)}% of budget used
             </p>
           )}

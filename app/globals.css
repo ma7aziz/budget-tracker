@@ -3,8 +3,74 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    color-scheme: light;
+    --bg: #f7f1e7;
+    --bg-gradient: radial-gradient(1200px circle at 10% -10%, rgba(242, 180, 65, 0.22), transparent 45%),
+      radial-gradient(900px circle at 90% 10%, rgba(20, 184, 160, 0.18), transparent 40%),
+      linear-gradient(180deg, #f7f1e7 0%, #fdf9f3 100%);
+    --surface: #fff9f1;
+    --surface-strong: #fff3e4;
+    --card: #fff9f1;
+    --ink: #1b2a24;
+    --muted: #6f5d4e;
+    --border: #e4d9c8;
+    --accent: #0f6b5a;
+    --accent-strong: #0c5b4d;
+    --accent-soft: #d7f3ec;
+    --danger: #e0524d;
+    --danger-soft: #fde5e4;
+    --warning: #f2b441;
+    --warning-soft: #fff1d1;
+    --shadow: 0 14px 32px rgba(27, 42, 36, 0.14);
+    --shadow-soft: 0 10px 24px rgba(27, 42, 36, 0.08);
+    --tooltip-bg: #fff9f1;
+    --tooltip-border: #e4d9c8;
+    --tooltip-text: #1b2a24;
+  }
+  
+  .dark {
+    color-scheme: dark;
+    --bg: #141f1b;
+    --bg-gradient: radial-gradient(900px circle at 15% -10%, rgba(41, 194, 163, 0.12), transparent 45%),
+      radial-gradient(800px circle at 85% 5%, rgba(242, 180, 65, 0.08), transparent 40%),
+      linear-gradient(180deg, #141f1b 0%, #0f1713 100%);
+    --surface: #1b2a24;
+    --surface-strong: #20332c;
+    --card: #1d2f28;
+    --ink: #f3f7f4;
+    --muted: #b9c6bf;
+    --border: #2b3f37;
+    --accent: #28c2a3;
+    --accent-strong: #1a9e86;
+    --accent-soft: rgba(40, 194, 163, 0.18);
+    --danger: #f07a73;
+    --danger-soft: rgba(240, 122, 115, 0.18);
+    --warning: #f4c263;
+    --warning-soft: rgba(244, 194, 99, 0.18);
+    --shadow: 0 16px 32px rgba(0, 0, 0, 0.35);
+    --shadow-soft: 0 12px 26px rgba(0, 0, 0, 0.28);
+    --tooltip-bg: #1d2f28;
+    --tooltip-border: #2b3f37;
+    --tooltip-text: #f3f7f4;
+  }
+  
   body {
-    @apply bg-gray-50 text-gray-900;
+    background-color: var(--bg);
+    background-image: var(--bg-gradient);
+    color: var(--ink);
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+  
+  * {
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
@@ -12,4 +78,42 @@
   .text-balance {
     text-wrap: balance;
   }
+  
+  /* Mobile app-like scrolling */
+  .smooth-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* iOS safe area support */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Smooth transitions for theme switching */
+html {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Custom scrollbar for mobile-like feel */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 999px;
+}
+
+/* Pull-to-refresh prevention (mobile browsers) */
+body {
+  overscroll-behavior-y: contain;
 }
