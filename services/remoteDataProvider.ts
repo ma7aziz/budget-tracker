@@ -1,0 +1,76 @@
+import type {
+  DataProvider,
+  TransactionRepository,
+  CategoryRepository,
+  BudgetRepository,
+  AccountRepository,
+  SettingsRepository,
+} from "./dataProvider";
+import type { ExportPayload } from "../utils/exportJson";
+import type { ImportReport } from "../utils/importJson";
+
+const notImplemented = async <T>(label: string): Promise<T> => {
+  throw new Error(`Remote data provider not configured: ${label}`);
+};
+
+const makeTransactions = (): TransactionRepository => ({
+  add: () => notImplemented("transactions.add"),
+  get: (id) => notImplemented(`transactions.get:${id}`),
+  update: (id) => notImplemented(`transactions.update:${id}`),
+  delete: (id) => notImplemented(`transactions.delete:${id}`),
+  list: () => notImplemented("transactions.list"),
+  listByDateRange: () => notImplemented("transactions.listByDateRange"),
+  listByMonth: (monthKey) => notImplemented(`transactions.listByMonth:${monthKey}`),
+  listByAccount: (accountId) => notImplemented(`transactions.listByAccount:${accountId}`),
+  listByCategory: (categoryId) => notImplemented(`transactions.listByCategory:${categoryId}`),
+});
+
+const makeCategories = (): CategoryRepository => ({
+  add: () => notImplemented("categories.add"),
+  get: (id) => notImplemented(`categories.get:${id}`),
+  update: (id) => notImplemented(`categories.update:${id}`),
+  delete: (id) => notImplemented(`categories.delete:${id}`),
+  list: () => notImplemented("categories.list"),
+  updateOrder: (id) => notImplemented(`categories.updateOrder:${id}`),
+});
+
+const makeBudgets = (): BudgetRepository => ({
+  add: () => notImplemented("budgets.add"),
+  get: (id) => notImplemented(`budgets.get:${id}`),
+  getForMonthCategory: (monthKey, categoryId) =>
+    notImplemented(`budgets.getForMonthCategory:${monthKey}:${categoryId}`),
+  upsertForMonth: (monthKey, categoryId) =>
+    notImplemented(`budgets.upsertForMonth:${monthKey}:${categoryId}`),
+  update: (id) => notImplemented(`budgets.update:${id}`),
+  delete: (id) => notImplemented(`budgets.delete:${id}`),
+  list: () => notImplemented("budgets.list"),
+  listForMonth: (monthKey) => notImplemented(`budgets.listForMonth:${monthKey}`),
+});
+
+const makeAccounts = (): AccountRepository => ({
+  add: () => notImplemented("accounts.add"),
+  get: (id) => notImplemented(`accounts.get:${id}`),
+  update: (id) => notImplemented(`accounts.update:${id}`),
+  delete: (id) => notImplemented(`accounts.delete:${id}`),
+  list: () => notImplemented("accounts.list"),
+});
+
+const makeSettings = (): SettingsRepository => ({
+  get: () => notImplemented("settings.get"),
+  set: () => notImplemented("settings.set"),
+  reset: () => notImplemented("settings.reset"),
+});
+
+export function createRemoteDataProvider(): DataProvider {
+  return {
+    kind: "remote",
+    transactions: makeTransactions(),
+    categories: makeCategories(),
+    budgets: makeBudgets(),
+    accounts: makeAccounts(),
+    settings: makeSettings(),
+    exportJson: () => notImplemented<ExportPayload>("exportJson"),
+    importJson: () => notImplemented<ImportReport>("importJson"),
+    exportCsv: () => notImplemented<string>("exportCsv"),
+  };
+}
