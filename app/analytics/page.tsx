@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Select, SelectOption } from "@/components/ui/Select";
@@ -33,6 +33,7 @@ interface CategoryData {
   valueCents: number;
   color: string;
   percentage: number;
+  [key: string]: any;
 }
 
 interface MonthlyData {
@@ -117,11 +118,7 @@ export default function AnalyticsPage() {
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
 
-  useEffect(() => {
-    loadAnalyticsData();
-  }, [monthKey]);
-
-  async function loadAnalyticsData() {
+  const loadAnalyticsData = useCallback(async () => {
     try {
       setLoading(true);
       const provider = getDataProvider();
@@ -354,7 +351,11 @@ export default function AnalyticsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [monthKey]);
+
+  useEffect(() => {
+    loadAnalyticsData();
+  }, [loadAnalyticsData]);
 
   if (loading) {
     return <LoadingScreen />;
@@ -448,7 +449,7 @@ export default function AnalyticsPage() {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={(entry) => `${entry.name} (${entry.percentage.toFixed(0)}%)`}
+                        label={(entry) => `${entry.name} (${entry.percent?.toFixed(0)}%)`}
                         outerRadius={90}
                         fill="#8884d8"
                         dataKey="valueCents"

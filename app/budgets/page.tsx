@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, useCallback, FormEvent } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -39,11 +39,7 @@ export default function BudgetsPage() {
   const [monthlyLimitAmount, setMonthlyLimitAmount] = useState("");
   const [monthlyFormError, setMonthlyFormError] = useState("");
 
-  useEffect(() => {
-    loadBudgetData();
-  }, [monthKey]);
-
-  async function loadBudgetData() {
+  const loadBudgetData = useCallback(async () => {
     try {
       setLoading(true);
       const provider = getDataProvider();
@@ -96,7 +92,11 @@ export default function BudgetsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [monthKey]);
+
+  useEffect(() => {
+    loadBudgetData();
+  }, [loadBudgetData]);
 
   async function handleSaveMonthlyBudget(e: FormEvent) {
     e.preventDefault();

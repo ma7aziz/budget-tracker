@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { MonthlySummary } from "@/components/dashboard/MonthlySummary";
@@ -30,14 +30,14 @@ interface OverBudgetAlert {
   overByCents: number;
   spentCents: number;
   budgetCents: number;
-  color?: string;
+  color: string | undefined;
 }
 
 interface UpcomingAlert {
   categoryId: string;
   categoryName: string;
   lastSpentCents: number;
-  color?: string;
+  color: string | undefined;
 }
 
 interface DailySpendPoint {
@@ -70,11 +70,7 @@ export default function DashboardPage() {
   const [overBudgetAlerts, setOverBudgetAlerts] = useState<OverBudgetAlert[]>([]);
   const [upcomingAlerts, setUpcomingAlerts] = useState<UpcomingAlert[]>([]);
 
-  useEffect(() => {
-    loadDashboardData();
-  }, [monthKey]);
-
-  async function loadDashboardData() {
+  const loadDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       const provider = getDataProvider();
@@ -226,7 +222,11 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [monthKey]);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
 
   function handleQuickAdd() {
     router.push("/transactions/new");

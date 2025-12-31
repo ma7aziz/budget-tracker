@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, useCallback, FormEvent } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/Button";
@@ -36,11 +36,7 @@ export default function EditTransactionPage() {
   
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    loadTransactionData();
-  }, [transactionId]);
-
-  async function loadTransactionData() {
+  const loadTransactionData = useCallback(async () => {
     try {
       setLoading(true);
       const provider = getDataProvider();
@@ -73,7 +69,11 @@ export default function EditTransactionPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [router, transactionId]);
+
+  useEffect(() => {
+    loadTransactionData();
+  }, [loadTransactionData]);
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
