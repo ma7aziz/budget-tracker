@@ -11,7 +11,7 @@ import {
 } from "../db/schema";
 import { clearSyncDelete, listSyncDeletes } from "../db/syncDeletes";
 import { getSupabaseClient, isSupabaseConfigured } from "./supabaseClient";
-import { getCurrentUserId } from "./supabaseAuth";
+import { getCurrentSession, getCurrentUserId } from "./supabaseAuth";
 
 type RemoteTransaction = {
   id: string;
@@ -499,6 +499,11 @@ export async function syncAll(): Promise<void> {
     return;
   }
 
+  const session = await getCurrentSession();
+  if (!session?.access_token) {
+    return;
+  }
+
   const userId = await getCurrentUserId();
   if (!userId) {
     return;
@@ -563,11 +568,11 @@ export async function syncAll(): Promise<void> {
   await mergeAccounts(remoteAccounts, localAccounts);
   await mergeSettings(remoteSettings, localSettings);
 
-  await pushTransactions(userId, remoteTransactions, localTransactions);
   await pushCategories(userId, remoteCategories, localCategories);
+  await pushAccounts(userId, remoteAccounts, localAccounts);
   await pushBudgets(userId, remoteBudgets, localBudgets);
   await pushMonthlyBudgets(userId, remoteMonthlyBudgets, localMonthlyBudgets);
-  await pushAccounts(userId, remoteAccounts, localAccounts);
+  await pushTransactions(userId, remoteTransactions, localTransactions);
 
   const currentSettings = await db.settings.get(SETTINGS_ID);
   if (currentSettings) {
@@ -578,8 +583,34 @@ export async function syncAll(): Promise<void> {
 }
 
 export function triggerSync(): void {
-  syncAll().catch(() => {
-    // Swallow sync errors to keep UI responsive.
+  syncAll().catch((error) => {
+    // Swallow sync errors to keep UI responsive, but keep them visible for debugging.
+    const maybeError = error as { message?: unknown; code?: unknown; details?: unknown; hint?: unknown };
+    const message = maybeError?.message;
+    const code = maybeError?.code;
+    if (typeof message === "string" && message.includes("No API key found in request")) {
+      console.warn(
+        "Supabase sync failed: missing API key. Check NEXT_PUBLIC_SUPABASE_ANON_KEY (no quotes/spaces), rebuild/reload the app, and if installed as a PWA clear site data/unregister the service worker."
+      );
+      console.warn(error);
+      return;
+    }
+
+    if (
+      typeof message === "string" &&
+      (message.toLowerCase().includes("permission denied") ||
+        message.toLowerCase().includes("row level security") ||
+        message.toLowerCase().includes("rls") ||
+        code === "42501")
+    ) {
+      console.warn(
+        "Supabase sync failed: access denied. Ensure you ran `supabase/schema.sql` (RLS policies + GRANTs), and verify the failing request includes an `Authorization: Bearer <jwt>` header (signed-in session)."
+      );
+      console.warn(error);
+      return;
+    }
+
+    console.warn("Supabase sync failed:", error);
   });
 }
 

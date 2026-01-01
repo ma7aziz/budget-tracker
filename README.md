@@ -65,7 +65,8 @@ The app is offline-first and defaults to IndexedDB storage.
 ## Supabase Setup (Optional)
 
 1. Create a Supabase project and run the SQL in `supabase/schema.sql`.
-2. Copy the project URL + anon key into `.env.local`:
+2. In Supabase Dashboard → Project Settings → API, add your app origin(s) to CORS (for local dev: `http://localhost:3000` and any LAN URL you use).
+3. Copy the project URL + anon key into `.env.local` (or `.env`):
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=...
@@ -73,7 +74,12 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 NEXT_PUBLIC_DATA_PROVIDER=supabase
 ```
 
-3. Start the app and visit `/auth` to sign in or create an account.
+4. Start the app and visit `/auth` to sign in or create an account.
+
+Notes:
+- Don’t wrap the anon key in quotes or leave trailing spaces (it can cause `No API key found in request`).
+- Use the Supabase **anon/public API key** (not the service role key).
+- If you change env vars, rebuild (`npm run build`) and hard refresh; if installed as a PWA, clear site data/unregister the service worker once.
 
 ### Migration Notes (Local → Supabase)
 

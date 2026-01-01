@@ -118,3 +118,17 @@ create policy "Settings are user-owned" on public.settings
   for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- PostgREST API roles need explicit table privileges in addition to RLS policies.
+-- RLS remains the real access control; these grants just allow the API to run.
+grant usage on schema public to anon, authenticated;
+
+grant select, insert, update, delete on table public.categories to anon, authenticated;
+grant select, insert, update, delete on table public.accounts to anon, authenticated;
+grant select, insert, update, delete on table public.budgets to anon, authenticated;
+grant select, insert, update, delete on table public.monthly_budgets to anon, authenticated;
+grant select, insert, update, delete on table public.transactions to anon, authenticated;
+grant select, insert, update, delete on table public.settings to anon, authenticated;
+
+-- Ensure future tables (if added) are accessible to the API roles (still gated by RLS).
+alter default privileges in schema public grant select, insert, update, delete on tables to anon, authenticated;
