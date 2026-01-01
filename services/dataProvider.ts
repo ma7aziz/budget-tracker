@@ -1,4 +1,12 @@
-import type { Transaction, Category, Budget, MonthlyBudget, Account, Settings } from "../db/schema";
+import type {
+  Transaction,
+  Category,
+  Budget,
+  MonthlyBudget,
+  Account,
+  Settings,
+  RecurringTemplate,
+} from "../db/schema";
 import type { NewTransactionInput } from "../db/transactions";
 import type { ExportPayload } from "../utils/exportJson";
 import type { ImportReport } from "../utils/importJson";
@@ -61,6 +69,17 @@ export interface AccountRepository {
   list(): Promise<Account[]>;
 }
 
+export interface RecurringTemplateRepository {
+  add(input: Omit<RecurringTemplate, "id">): Promise<RecurringTemplate>;
+  get(id: string): Promise<RecurringTemplate | undefined>;
+  update(
+    id: string,
+    updates: Partial<Omit<RecurringTemplate, "id" | "createdAt">>
+  ): Promise<boolean>;
+  delete(id: string): Promise<void>;
+  list(): Promise<RecurringTemplate[]>;
+}
+
 export interface SettingsRepository {
   get(): Promise<Settings>;
   set(updates: Partial<Settings>): Promise<Settings>;
@@ -74,6 +93,7 @@ export interface DataProvider {
   budgets: BudgetRepository;
   monthlyBudgets: MonthlyBudgetRepository;
   accounts: AccountRepository;
+  recurringTemplates: RecurringTemplateRepository;
   settings: SettingsRepository;
   exportJson(): Promise<ExportPayload>;
   importJson(payload: ExportPayload): Promise<ImportReport>;

@@ -11,6 +11,10 @@ export const metadata: Metadata = {
   title: "Budget Tracker",
   description: "Offline-first personal budget tracker.",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/logos/logo.png",
+    apple: "/logos/logo.png",
+  },
 };
 
 export const viewport = {
@@ -19,7 +23,7 @@ export const viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#0f6b5a",
+  themeColor: "#0b0b0b",
 };
 
 const displayFont = Fraunces({

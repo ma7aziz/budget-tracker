@@ -51,7 +51,11 @@ export function RecentTransactions({
                   )}
                 </div>
               </div>
-              <div className={`font-semibold ${isExpense ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
+              <div
+                className={`font-semibold ${
+                  isExpense ? "text-[var(--danger)]" : "text-[var(--positive)]"
+                }`}
+              >
                 {isExpense ? "-" : "+"}{formatCents(transaction.amountCents)}
               </div>
             </div>

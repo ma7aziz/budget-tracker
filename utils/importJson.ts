@@ -4,6 +4,7 @@ import {
   Budget,
   Category,
   MonthlyBudget,
+  RecurringTemplate,
   db,
   SCHEMA_VERSION,
   Settings,
@@ -17,6 +18,7 @@ import { ExportPayload } from "./exportJson";
 export interface ImportReport {
   transactionsAdded: number;
   categoriesAdded: number;
+  recurringTemplatesAdded: number;
   budgetsAdded: number;
   monthlyBudgetsAdded: number;
   accountsAdded: number;
@@ -33,6 +35,9 @@ const isInteger = (value: unknown): value is number =>
 
 const isNullableString = (value: unknown): value is string | null =>
   value === null || typeof value === "string";
+
+const isOptionalBoolean = (value: unknown): value is boolean | undefined =>
+  typeof value === "boolean" || typeof value === "undefined";
 
 const assertCondition = (condition: boolean, message: string): void => {
   if (!condition) {
@@ -74,6 +79,10 @@ const validateCategory = (category: Category): void => {
   );
   assertCondition(isInteger(category.order), "Category order must be an integer.");
   assertCondition(isNullableString(category.color), "Category color must be string or null.");
+  assertCondition(
+    isOptionalBoolean(category.rolloverEnabled),
+    "Category rolloverEnabled must be boolean."
+  );
 };
 
 const validateBudget = (budget: Budget): void => {
@@ -114,6 +123,44 @@ const validateSettings = (settings: Settings): void => {
   assertCondition(isNonEmptyString(settings.theme), "Settings theme is required.");
 };
 
+const validateRecurringTemplate = (template: RecurringTemplate): void => {
+  assertCondition(isNonEmptyString(template.id), "Recurring template id is required.");
+  assertCondition(
+    template.type === "expense" || template.type === "income",
+    "Recurring template type must be expense or income."
+  );
+  assertCondition(
+    isInteger(template.amountCents) && template.amountCents >= 0,
+    "Recurring template amountCents must be a non-negative integer."
+  );
+  assertCondition(
+    isNonEmptyString(template.categoryId),
+    "Recurring template categoryId is required."
+  );
+  assertCondition(
+    isNullableString(template.accountId),
+    "Recurring template accountId must be string or null."
+  );
+  assertCondition(
+    isNullableString(template.merchant),
+    "Recurring template merchant must be string or null."
+  );
+  assertCondition(isNullableString(template.note), "Recurring template note must be string or null.");
+  assertCondition(
+    template.cadence === "monthly",
+    "Recurring template cadence must be monthly."
+  );
+  assertCondition(
+    isInteger(template.dayOfMonth) && template.dayOfMonth >= 1 && template.dayOfMonth <= 31,
+    "Recurring template dayOfMonth must be between 1 and 31."
+  );
+  assertCondition(typeof template.isActive === "boolean", "Recurring template isActive is required.");
+  assertCondition(
+    isNullableString(template.lastPostedMonth),
+    "Recurring template lastPostedMonth must be string or null."
+  );
+};
+
 export const validateExportPayload = (payload: ExportPayload): void => {
   assertCondition(
     payload.schemaVersion <= SCHEMA_VERSION,
@@ -122,6 +169,12 @@ export const validateExportPayload = (payload: ExportPayload): void => {
 
   assertCondition(Array.isArray(payload.transactions), "Transactions must be an array.");
   assertCondition(Array.isArray(payload.categories), "Categories must be an array.");
+  const recurringTemplates =
+    (payload as ExportPayload & { recurringTemplates?: RecurringTemplate[] }).recurringTemplates;
+  assertCondition(
+    Array.isArray(recurringTemplates ?? []),
+    "Recurring templates must be an array."
+  );
   assertCondition(Array.isArray(payload.budgets), "Budgets must be an array.");
   const monthlyBudgets = (payload as ExportPayload & { monthlyBudgets?: MonthlyBudget[] })
     .monthlyBudgets;
@@ -137,6 +190,7 @@ export const validateExportPayload = (payload: ExportPayload): void => {
 
   payload.transactions.forEach(validateTransaction);
   payload.categories.forEach(validateCategory);
+  (recurringTemplates ?? []).forEach(validateRecurringTemplate);
   payload.budgets.forEach(validateBudget);
   (monthlyBudgets ?? []).forEach(validateMonthlyBudget);
   payload.accounts.forEach(validateAccount);
@@ -167,10 +221,25 @@ export async function importJson(payload: ExportPayload): Promise<ImportReport> 
   validateExportPayload(payload);
   const normalizedMonthlyBudgets =
     (payload as ExportPayload & { monthlyBudgets?: MonthlyBudget[] }).monthlyBudgets ?? [];
+  const normalizedRecurringTemplates =
+    (payload as ExportPayload & { recurringTemplates?: RecurringTemplate[] }).recurringTemplates ??
+    [];
+  const normalizedCategories = payload.categories.map((category) => ({
+    ...category,
+    rolloverEnabled: category.rolloverEnabled ?? false,
+  }));
 
   return db.transaction(
     "rw",
-    [db.transactions, db.categories, db.budgets, db.accounts, db.settings],
+    [
+      db.transactions,
+      db.categories,
+      db.recurringTemplates,
+      db.budgets,
+      db.monthlyBudgets,
+      db.accounts,
+      db.settings,
+    ],
     async () => {
       const transactionsAdded = await addWithoutDuplicates(
         db.transactions,
@@ -178,7 +247,11 @@ export async function importJson(payload: ExportPayload): Promise<ImportReport> 
       );
       const categoriesAdded = await addWithoutDuplicates(
         db.categories,
-        payload.categories
+        normalizedCategories
+      );
+      const recurringTemplatesAdded = await addWithoutDuplicates(
+        db.recurringTemplates,
+        normalizedRecurringTemplates
       );
       const budgetsAdded = await addWithoutDuplicates(db.budgets, payload.budgets);
       const monthlyBudgetsAdded = await addWithoutDuplicates(
@@ -193,6 +266,7 @@ export async function importJson(payload: ExportPayload): Promise<ImportReport> 
       return {
         transactionsAdded,
         categoriesAdded,
+        recurringTemplatesAdded,
         budgetsAdded,
         monthlyBudgetsAdded,
         accountsAdded,

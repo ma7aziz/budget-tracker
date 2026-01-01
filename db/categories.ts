@@ -10,6 +10,7 @@ export async function addCategory(input: NewCategoryInput): Promise<Category> {
     id: generateId(),
     parentId: input.parentId ?? null,
     color: input.color ?? null,
+    rolloverEnabled: input.rolloverEnabled ?? false,
     createdAt: now,
     updatedAt: now,
   };
@@ -39,6 +40,9 @@ export async function updateCategory(
   }
   if ("color" in updates) {
     updateData.color = updates.color ?? null;
+  }
+  if ("rolloverEnabled" in updates) {
+    updateData.rolloverEnabled = Boolean(updates.rolloverEnabled);
   }
   updateData.updatedAt = new Date().toISOString();
 

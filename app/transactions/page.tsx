@@ -257,7 +257,11 @@ export default function TransactionsPage() {
                         </div>
                       </div>
                       
-                      <div className={`font-semibold whitespace-nowrap ${isExpense ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
+                      <div
+                        className={`font-semibold whitespace-nowrap ${
+                          isExpense ? "text-[var(--danger)]" : "text-[var(--positive)]"
+                        }`}
+                      >
                         {isExpense ? "-" : "+"}{formatCents(tx.amountCents)}
                       </div>
                     </div>

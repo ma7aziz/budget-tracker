@@ -10,6 +10,7 @@ create table if not exists public.categories (
   parent_id uuid references public.categories(id) on delete set null,
   "order" integer not null default 0,
   color text,
+  rollover_enabled boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -58,6 +59,23 @@ create table if not exists public.transactions (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.recurring_templates (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  type text not null check (type in ('expense', 'income')),
+  amount_cents integer not null check (amount_cents >= 0),
+  category_id uuid references public.categories(id) on delete cascade not null,
+  account_id uuid references public.accounts(id) on delete set null,
+  merchant text,
+  note text,
+  cadence text not null check (cadence in ('monthly')),
+  day_of_month integer not null check (day_of_month >= 1 and day_of_month <= 31),
+  is_active boolean not null default true,
+  last_posted_month text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.settings (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade not null unique,
@@ -81,12 +99,15 @@ create index if not exists idx_budgets_user_month on public.budgets(user_id, mon
 create index if not exists idx_monthly_budgets_user_id on public.monthly_budgets(user_id);
 create index if not exists idx_monthly_budgets_user_month on public.monthly_budgets(user_id, month);
 create index if not exists idx_settings_user_id on public.settings(user_id);
+create index if not exists idx_recurring_templates_user_id on public.recurring_templates(user_id);
+create index if not exists idx_recurring_templates_user_month on public.recurring_templates(user_id, last_posted_month);
 
 alter table public.categories enable row level security;
 alter table public.accounts enable row level security;
 alter table public.budgets enable row level security;
 alter table public.monthly_budgets enable row level security;
 alter table public.transactions enable row level security;
+alter table public.recurring_templates enable row level security;
 alter table public.settings enable row level security;
 
 create policy "Categories are user-owned" on public.categories
@@ -114,6 +135,11 @@ create policy "Transactions are user-owned" on public.transactions
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+create policy "Recurring templates are user-owned" on public.recurring_templates
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
 create policy "Settings are user-owned" on public.settings
   for all
   using (auth.uid() = user_id)
@@ -128,6 +154,7 @@ grant select, insert, update, delete on table public.accounts to anon, authentic
 grant select, insert, update, delete on table public.budgets to anon, authenticated;
 grant select, insert, update, delete on table public.monthly_budgets to anon, authenticated;
 grant select, insert, update, delete on table public.transactions to anon, authenticated;
+grant select, insert, update, delete on table public.recurring_templates to anon, authenticated;
 grant select, insert, update, delete on table public.settings to anon, authenticated;
 
 -- Ensure future tables (if added) are accessible to the API roles (still gated by RLS).

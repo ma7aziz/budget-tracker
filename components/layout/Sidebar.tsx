@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, List, PieChart, DollarSign, Settings } from "lucide-react";
@@ -18,7 +19,10 @@ export function Sidebar() {
   return (
     <aside className="hidden md:flex md:flex-col w-64 bg-[var(--surface)] border-r border-[var(--border)] h-screen sticky top-0">
       <div className="p-6 border-b border-[var(--border)]">
-        <h1 className="text-2xl font-semibold font-display text-[var(--accent)]">Budget Tracker</h1>
+        <div className="flex items-center gap-3">
+          <Image src="/logos/logo.png" alt="Budget Tracker" width={44} height={44} />
+          <h1 className="text-2xl font-semibold font-display text-[var(--ink)]">Budget Tracker</h1>
+        </div>
       </div>
       <nav className="flex-1 p-4 space-y-2">
         {navItems.map(({ href, label, icon: Icon }) => {

@@ -1,6 +1,6 @@
 import Dexie, { Table } from "dexie";
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export type TransactionType = "expense" | "income";
 
@@ -23,6 +23,7 @@ export interface Category {
   parentId: string | null;
   order: number;
   color: string | null;
+  rolloverEnabled: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -73,7 +74,26 @@ export type SyncTable =
   | "budgets"
   | "monthly_budgets"
   | "accounts"
-  | "settings";
+  | "settings"
+  | "recurring_templates";
+
+export type RecurringCadence = "monthly";
+
+export interface RecurringTemplate {
+  id: string;
+  type: TransactionType;
+  amountCents: number;
+  categoryId: string;
+  accountId: string | null;
+  merchant: string | null;
+  note: string | null;
+  cadence: RecurringCadence;
+  dayOfMonth: number;
+  isActive: boolean;
+  lastPostedMonth: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 export interface SyncDelete {
   table: SyncTable;
@@ -84,8 +104,8 @@ export interface SyncDelete {
 export const SETTINGS_ID = "settings";
 
 export const defaultSettings: Settings = {
-  currency: "USD",
-  locale: "en-US",
+  currency: "EGP",
+  locale: "en-EG",
   weekStart: 0,
   theme: "light",
 };
@@ -93,6 +113,7 @@ export const defaultSettings: Settings = {
 export class BudgetTrackerDB extends Dexie {
   transactions!: Table<Transaction, string>;
   categories!: Table<Category, string>;
+  recurringTemplates!: Table<RecurringTemplate, string>;
   budgets!: Table<Budget, string>;
   monthlyBudgets!: Table<MonthlyBudget, string>;
   accounts!: Table<Account, string>;
@@ -106,6 +127,7 @@ export class BudgetTrackerDB extends Dexie {
       transactions:
         "id, date, type, categoryId, accountId, [type+date], [categoryId+date], [accountId+date]",
       categories: "id, parentId, order, name",
+      recurringTemplates: "id, categoryId, isActive, cadence, dayOfMonth, lastPostedMonth",
       budgets: "id, month, categoryId, [month+categoryId]",
       monthlyBudgets: "id, month",
       accounts: "id, type, name",

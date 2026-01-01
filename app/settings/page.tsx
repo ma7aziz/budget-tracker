@@ -6,14 +6,16 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Select, SelectOption } from "@/components/ui/Select";
 import { LoadingScreen } from "@/components/ui/Loading";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { Plus, X, Download, Upload, Trash2 } from "lucide-react";
 import { getDataProvider, getDefaultDataProviderKind } from "@/services/dataProvider";
-import { Category, Account, AccountType } from "@/db/schema";
+import { Category, Account, AccountType, RecurringTemplate, TransactionType } from "@/db/schema";
 import { syncAll } from "@/services/supabaseSync";
 import { isSupabaseConfigured } from "@/services/supabaseClient";
 import { getCurrentSession, signOut } from "@/services/supabaseAuth";
+import { formatCents, parseCentsInput } from "@/utils/formatting";
 
 const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: "cash", label: "Cash" },
@@ -27,6 +29,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [recurringTemplates, setRecurringTemplates] = useState<RecurringTemplate[]>([]);
   
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -35,6 +38,15 @@ export default function SettingsPage() {
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [newAccountName, setNewAccountName] = useState("");
   const [newAccountType, setNewAccountType] = useState<AccountType>("bank");
+  const [showAddTemplate, setShowAddTemplate] = useState(false);
+  const [templateType, setTemplateType] = useState<TransactionType>("expense");
+  const [templateAmount, setTemplateAmount] = useState("");
+  const [templateCategoryId, setTemplateCategoryId] = useState("");
+  const [templateAccountId, setTemplateAccountId] = useState("");
+  const [templateMerchant, setTemplateMerchant] = useState("");
+  const [templateNote, setTemplateNote] = useState("");
+  const [templateDayOfMonth, setTemplateDayOfMonth] = useState("1");
+  const [templateError, setTemplateError] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   
@@ -43,6 +55,12 @@ export default function SettingsPage() {
   useEffect(() => {
     loadSettings();
   }, []);
+
+  useEffect(() => {
+    if (!templateCategoryId && categories.length > 0) {
+      setTemplateCategoryId(categories[0].id);
+    }
+  }, [categories, templateCategoryId]);
 
   async function loadSettings() {
     try {
@@ -55,13 +73,15 @@ export default function SettingsPage() {
         setUserEmail(null);
       }
       
-      const [cats, accs] = await Promise.all([
+      const [cats, accs, templates] = await Promise.all([
         provider.categories.list(),
         provider.accounts.list(),
+        provider.recurringTemplates.list(),
       ]);
       
       setCategories(cats);
       setAccounts(accs);
+      setRecurringTemplates(templates);
     } catch (error) {
       console.error("Failed to load settings:", error);
     } finally {
@@ -83,6 +103,7 @@ export default function SettingsPage() {
         parentId: null,
         order: categories.length,
         color: newCategoryColor,
+        rolloverEnabled: false,
       });
       
       setNewCategoryName("");
@@ -147,6 +168,76 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleAddTemplate(e: FormEvent) {
+    e.preventDefault();
+    setTemplateError("");
+
+    const amountCents = parseCentsInput(templateAmount);
+    const dayOfMonth = Number(templateDayOfMonth);
+    if (!amountCents || amountCents <= 0) {
+      setTemplateError("Enter a valid amount.");
+      return;
+    }
+    if (!templateCategoryId) {
+      setTemplateError("Select a category.");
+      return;
+    }
+    if (!Number.isInteger(dayOfMonth) || dayOfMonth < 1 || dayOfMonth > 31) {
+      setTemplateError("Day of month must be between 1 and 31.");
+      return;
+    }
+
+    try {
+      const provider = getDataProvider();
+      await provider.recurringTemplates.add({
+        type: templateType,
+        amountCents,
+        categoryId: templateCategoryId,
+        accountId: templateAccountId || null,
+        merchant: templateMerchant.trim() || null,
+        note: templateNote.trim() || null,
+        cadence: "monthly",
+        dayOfMonth,
+        isActive: true,
+        lastPostedMonth: null,
+      });
+
+      setTemplateAmount("");
+      setTemplateMerchant("");
+      setTemplateNote("");
+      setTemplateDayOfMonth("1");
+      setShowAddTemplate(false);
+      await loadSettings();
+    } catch (error) {
+      console.error("Failed to add recurring template:", error);
+      setTemplateError("Failed to add template.");
+    }
+  }
+
+  async function handleToggleTemplate(id: string, enabled: boolean) {
+    try {
+      const provider = getDataProvider();
+      await provider.recurringTemplates.update(id, { isActive: enabled });
+      await loadSettings();
+    } catch (error) {
+      console.error("Failed to update template:", error);
+    }
+  }
+
+  async function handleDeleteTemplate(id: string) {
+    if (!confirm("Delete this recurring template?")) {
+      return;
+    }
+
+    try {
+      const provider = getDataProvider();
+      await provider.recurringTemplates.delete(id);
+      await loadSettings();
+    } catch (error) {
+      console.error("Failed to delete template:", error);
+    }
+  }
+
   async function handleExportJson() {
     try {
       const provider = getDataProvider();
@@ -195,7 +286,7 @@ export default function SettingsPage() {
       const report = await provider.importJson(data);
       
       alert(
-        `Import completed!\nTransactions: ${report.transactionsAdded}\nCategories: ${report.categoriesAdded}\nBudgets: ${report.budgetsAdded}\nMonthly Budgets: ${report.monthlyBudgetsAdded}\nAccounts: ${report.accountsAdded}`
+        `Import completed!\nTransactions: ${report.transactionsAdded}\nCategories: ${report.categoriesAdded}\nRecurring Templates: ${report.recurringTemplatesAdded}\nBudgets: ${report.budgetsAdded}\nMonthly Budgets: ${report.monthlyBudgetsAdded}\nAccounts: ${report.accountsAdded}`
       );
       
       await loadSettings();
@@ -274,6 +365,17 @@ export default function SettingsPage() {
   }
 
   const canSync = isSupabaseConfigured() && getDefaultDataProviderKind() === "supabase";
+  const templateCategoryOptions: SelectOption[] = categories.map((category) => ({
+    value: category.id,
+    label: category.name,
+  }));
+  const templateAccountOptions: SelectOption[] = [
+    { value: "", label: "No account" },
+    ...accounts.map((account) => ({
+      value: account.id,
+      label: account.name,
+    })),
+  ];
 
   return (
     <AppLayout>
@@ -464,6 +566,158 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
         
+        {/* Recurring Templates */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Recurring Templates</CardTitle>
+              {!showAddTemplate && (
+                <Button size="sm" onClick={() => setShowAddTemplate(true)}>
+                  <Plus size={16} className="mr-2" />
+                  Add Template
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {showAddTemplate && (
+              <form
+                onSubmit={handleAddTemplate}
+                className="mb-4 p-4 bg-[var(--surface-strong)] border border-[var(--border)] rounded-xl space-y-3"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={templateType === "expense" ? "primary" : "secondary"}
+                    onClick={() => setTemplateType("expense")}
+                  >
+                    Expense
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={templateType === "income" ? "primary" : "secondary"}
+                    onClick={() => setTemplateType("income")}
+                  >
+                    Income
+                  </Button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <Input
+                    label="Amount"
+                    type="number"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={templateAmount}
+                    onChange={(e) => setTemplateAmount(e.target.value)}
+                    placeholder="0.00"
+                  />
+                  <Select
+                    label="Category"
+                    options={templateCategoryOptions}
+                    value={templateCategoryId}
+                    onChange={(e) => setTemplateCategoryId(e.target.value)}
+                    placeholder="Select category"
+                  />
+                  <Select
+                    label="Account"
+                    options={templateAccountOptions}
+                    value={templateAccountId}
+                    onChange={(e) => setTemplateAccountId(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <Input
+                    label="Merchant"
+                    value={templateMerchant}
+                    onChange={(e) => setTemplateMerchant(e.target.value)}
+                    placeholder="Optional"
+                  />
+                  <Input
+                    label="Note"
+                    value={templateNote}
+                    onChange={(e) => setTemplateNote(e.target.value)}
+                    placeholder="Optional"
+                  />
+                  <Input
+                    label="Day of Month"
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={templateDayOfMonth}
+                    onChange={(e) => setTemplateDayOfMonth(e.target.value)}
+                  />
+                </div>
+                {templateError && (
+                  <p className="text-sm text-[var(--danger)]">{templateError}</p>
+                )}
+                <div className="flex gap-2">
+                  <Button type="submit" size="sm">Add</Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setShowAddTemplate(false)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            )}
+
+            <div className="space-y-2">
+              {recurringTemplates.map((template) => {
+                const category = categories.find((cat) => cat.id === template.categoryId);
+                return (
+                  <div
+                    key={template.id}
+                    className="flex items-center justify-between p-3 bg-[var(--surface-strong)] border border-[var(--border)] rounded-xl"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                        {template.merchant || category?.name || "Recurring"}
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Day {template.dayOfMonth} • {template.type} • {formatCents(template.amountCents)}
+                      </p>
+                      {template.lastPostedMonth && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Last posted {template.lastPostedMonth}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                        <input
+                          type="checkbox"
+                          checked={template.isActive}
+                          onChange={(e) => handleToggleTemplate(template.id, e.target.checked)}
+                          className="h-4 w-4 rounded border-[var(--border)] bg-[var(--surface)] text-[var(--accent)]"
+                        />
+                        Active
+                      </label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteTemplate(template.id)}
+                      >
+                        <X size={16} />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {recurringTemplates.length === 0 && !showAddTemplate && (
+                <p className="text-center text-gray-500 dark:text-gray-400 py-4">
+                  No recurring templates yet
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Data Management */}
         <Card>
           <CardHeader>

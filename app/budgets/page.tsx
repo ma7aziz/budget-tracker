@@ -13,6 +13,7 @@ import { DollarSign, Plus, X } from "lucide-react";
 import { getDataProvider } from "@/services/dataProvider";
 import { Budget, Category, MonthlyBudget } from "@/db/schema";
 import { formatCents, getCurrentMonthKey, formatMonthYear, parseCentsInput } from "@/utils/formatting";
+import { getPreviousMonthKey } from "@/services/monthHelpers";
 
 interface BudgetWithSpending extends Budget {
   categoryName: string;
@@ -20,6 +21,9 @@ interface BudgetWithSpending extends Budget {
   spentCents: number;
   remainingCents: number;
   percentage: number;
+  effectiveLimitCents: number;
+  rolloverCents: number;
+  rolloverEnabled: boolean;
 }
 
 export default function BudgetsPage() {
@@ -43,11 +47,14 @@ export default function BudgetsPage() {
     try {
       setLoading(true);
       const provider = getDataProvider();
-      
-      const [cats, buds, txs, monthBudget] = await Promise.all([
+
+      const previousMonthKey = getPreviousMonthKey(monthKey);
+      const [cats, buds, txs, prevBuds, prevTxs, monthBudget] = await Promise.all([
         provider.categories.list(),
         provider.budgets.listForMonth(monthKey),
         provider.transactions.listByMonth(monthKey),
+        provider.budgets.listForMonth(previousMonthKey),
+        provider.transactions.listByMonth(previousMonthKey),
         provider.monthlyBudgets.getForMonth(monthKey),
       ]);
       
@@ -57,6 +64,10 @@ export default function BudgetsPage() {
         monthBudget ? (monthBudget.limitCents / 100).toFixed(2) : ""
       );
       
+      const categoryMap = new Map(
+        cats.map((cat) => [cat.id, { ...cat, rolloverEnabled: cat.rolloverEnabled ?? false }])
+      );
+
       // Calculate spending per category
       const categorySpending = new Map<string, number>();
       let totalSpent = 0;
@@ -68,13 +79,39 @@ export default function BudgetsPage() {
           totalSpent += t.amountCents;
         });
       
+      const previousCategorySpending = new Map<string, number>();
+      prevTxs
+        .filter((t) => t.type === "expense")
+        .forEach((t) => {
+          const current = previousCategorySpending.get(t.categoryId) || 0;
+          previousCategorySpending.set(t.categoryId, current + t.amountCents);
+        });
+
+      const carryoverByCategory = new Map<string, number>();
+      prevBuds.forEach((budget) => {
+        const category = categoryMap.get(budget.categoryId);
+        if (!category?.rolloverEnabled) {
+          return;
+        }
+        const spent = previousCategorySpending.get(budget.categoryId) || 0;
+        const remaining = budget.limitCents - spent;
+        if (remaining > 0) {
+          carryoverByCategory.set(budget.categoryId, remaining);
+        }
+      });
+
       // Combine budgets with spending
       const budgetsWithSpending: BudgetWithSpending[] = buds.map((budget) => {
-        const category = cats.find((c) => c.id === budget.categoryId);
+        const category = categoryMap.get(budget.categoryId);
         const spentCents = categorySpending.get(budget.categoryId) || 0;
-        const remainingCents = budget.limitCents - spentCents;
-        const percentage = budget.limitCents > 0 ? (spentCents / budget.limitCents) * 100 : 0;
-        
+        const rolloverCents = category?.rolloverEnabled
+          ? carryoverByCategory.get(budget.categoryId) || 0
+          : 0;
+        const effectiveLimitCents = budget.limitCents + rolloverCents;
+        const remainingCents = effectiveLimitCents - spentCents;
+        const percentage =
+          effectiveLimitCents > 0 ? (spentCents / effectiveLimitCents) * 100 : 0;
+
         return {
           ...budget,
           categoryName: category?.name || "Unknown",
@@ -82,6 +119,9 @@ export default function BudgetsPage() {
           spentCents,
           remainingCents,
           percentage,
+          effectiveLimitCents,
+          rolloverCents,
+          rolloverEnabled: category?.rolloverEnabled ?? false,
         };
       });
       
@@ -187,6 +227,16 @@ export default function BudgetsPage() {
     }
   }
 
+  async function handleToggleRollover(categoryId: string, enabled: boolean) {
+    try {
+      const provider = getDataProvider();
+      await provider.categories.update(categoryId, { rolloverEnabled: enabled });
+      await loadBudgetData();
+    } catch (error) {
+      console.error("Failed to update rollover setting:", error);
+    }
+  }
+
   if (loading) {
     return <LoadingScreen />;
   }
@@ -201,7 +251,8 @@ export default function BudgetsPage() {
   }));
   
   const totalBudget =
-    monthlyBudget?.limitCents ?? budgets.reduce((sum, b) => sum + b.limitCents, 0);
+    monthlyBudget?.limitCents ??
+    budgets.reduce((sum, b) => sum + b.effectiveLimitCents, 0);
   const totalSpent = monthlyBudget
     ? totalSpentAll
     : budgets.reduce((sum, b) => sum + b.spentCents, 0);
@@ -349,7 +400,11 @@ export default function BudgetsPage() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600 dark:text-gray-400">Remaining:</span>
-                  <span className={`font-semibold ${totalRemaining >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                  <span
+                    className={`font-semibold ${
+                      totalRemaining >= 0 ? "text-[var(--positive)]" : "text-[var(--danger)]"
+                    }`}
+                  >
                     {formatCents(totalRemaining)}
                   </span>
                 </div>
@@ -381,7 +436,7 @@ export default function BudgetsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {budgets.map((budget) => {
-              const overBudget = budget.spentCents > budget.limitCents;
+              const overBudget = budget.spentCents > budget.effectiveLimitCents;
               const nearLimit = budget.percentage > 80 && !overBudget;
               const variant = overBudget ? "danger" : nearLimit ? "warning" : "default";
               
@@ -399,13 +454,26 @@ export default function BudgetsPage() {
                           )}
                           <h3 className="font-semibold text-gray-900 dark:text-gray-100">{budget.categoryName}</h3>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteBudget(budget.id)}
-                        >
-                          <X size={16} />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <label className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                            <input
+                              type="checkbox"
+                              checked={budget.rolloverEnabled}
+                              onChange={(e) =>
+                                handleToggleRollover(budget.categoryId, e.target.checked)
+                              }
+                              className="h-4 w-4 rounded border-[var(--border)] bg-[var(--surface)] text-[var(--accent)]"
+                            />
+                            Rollover
+                          </label>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteBudget(budget.id)}
+                          >
+                            <X size={16} />
+                          </Button>
+                        </div>
                       </div>
                       
                       <div className="space-y-2">
@@ -415,11 +483,25 @@ export default function BudgetsPage() {
                         </div>
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-600 dark:text-gray-400">Budget:</span>
-                          <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCents(budget.limitCents)}</span>
+                          <span className="font-semibold text-gray-900 dark:text-gray-100">
+                            {formatCents(budget.effectiveLimitCents)}
+                          </span>
                         </div>
+                        {budget.rolloverCents > 0 && (
+                          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                            <span>Rollover:</span>
+                            <span>+ {formatCents(budget.rolloverCents)}</span>
+                          </div>
+                        )}
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-600 dark:text-gray-400">Remaining:</span>
-                          <span className={`font-semibold ${budget.remainingCents >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                          <span
+                            className={`font-semibold ${
+                              budget.remainingCents >= 0
+                                ? "text-[var(--positive)]"
+                                : "text-[var(--danger)]"
+                            }`}
+                          >
                             {formatCents(Math.abs(budget.remainingCents))}
                             {budget.remainingCents < 0 && " over"}
                           </span>
@@ -428,7 +510,7 @@ export default function BudgetsPage() {
                       
                       <ProgressBar
                         current={budget.spentCents}
-                        max={budget.limitCents}
+                        max={budget.effectiveLimitCents}
                         variant={variant}
                       />
                       

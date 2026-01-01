@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { MonthlySummary } from "@/components/dashboard/MonthlySummary";
@@ -9,6 +9,8 @@ import { RecentTransactions } from "@/components/dashboard/RecentTransactions";
 import { FloatingActionButton } from "@/components/ui/FloatingActionButton";
 import { LoadingScreen } from "@/components/ui/Loading";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Select, SelectOption } from "@/components/ui/Select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import {
   Plus,
@@ -19,8 +21,15 @@ import {
 } from "lucide-react";
 import { ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Tooltip } from "recharts";
 import { getDataProvider } from "@/services/dataProvider";
-import { Transaction, Category, Budget } from "@/db/schema";
-import { formatCents, getCurrentMonthKey, formatMonthYear } from "@/utils/formatting";
+import {
+  Transaction,
+  Category,
+  Budget,
+  Account,
+  RecurringTemplate,
+  TransactionType,
+} from "@/db/schema";
+import { formatCents, getCurrentMonthKey, formatMonthYear, parseCentsInput } from "@/utils/formatting";
 import { getMonthEnd, getPreviousMonthKey } from "@/services/monthHelpers";
 import { getTopMerchantsForMonth, MerchantTotal } from "@/services/calculations";
 
@@ -56,6 +65,8 @@ export default function DashboardPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [recurringTemplates, setRecurringTemplates] = useState<RecurringTemplate[]>([]);
 
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
@@ -69,6 +80,14 @@ export default function DashboardPage() {
   const [topMerchants, setTopMerchants] = useState<MerchantTotal[]>([]);
   const [overBudgetAlerts, setOverBudgetAlerts] = useState<OverBudgetAlert[]>([]);
   const [upcomingAlerts, setUpcomingAlerts] = useState<UpcomingAlert[]>([]);
+  const [averageDailyMode, setAverageDailyMode] = useState<"elapsed" | "month">("elapsed");
+  const [quickAddAmount, setQuickAddAmount] = useState("");
+  const [quickAddCategoryId, setQuickAddCategoryId] = useState("");
+  const [quickAddAccountId, setQuickAddAccountId] = useState("");
+  const [quickAddMerchant, setQuickAddMerchant] = useState("");
+  const [quickAddType, setQuickAddType] = useState<TransactionType>("expense");
+  const [quickAddError, setQuickAddError] = useState("");
+  const [quickAddSaving, setQuickAddSaving] = useState(false);
 
   const loadDashboardData = useCallback(async () => {
     try {
@@ -76,17 +95,22 @@ export default function DashboardPage() {
       const provider = getDataProvider();
       const comparisonMonthKey = getPreviousMonthKey(monthKey);
 
-      const [txs, prevTxs, cats, buds, monthBudget] = await Promise.all([
+      const [txs, prevTxs, cats, buds, monthBudget, prevBuds, accs, templates] = await Promise.all([
         provider.transactions.listByMonth(monthKey),
         provider.transactions.listByMonth(comparisonMonthKey),
         provider.categories.list(),
         provider.budgets.listForMonth(monthKey),
         provider.monthlyBudgets.getForMonth(monthKey),
+        provider.budgets.listForMonth(comparisonMonthKey),
+        provider.accounts.list(),
+        provider.recurringTemplates.list(),
       ]);
 
       setTransactions(txs);
       setCategories(cats);
       setBudgets(buds);
+      setAccounts(accs);
+      setRecurringTemplates(templates);
 
       const income = txs
         .filter((t) => t.type === "income")
@@ -96,11 +120,8 @@ export default function DashboardPage() {
         .filter((t) => t.type === "expense")
         .reduce((sum, t) => sum + t.amountCents, 0);
 
-      const budget = monthBudget?.limitCents ?? buds.reduce((sum, b) => sum + b.limitCents, 0);
-
       setTotalIncome(income);
       setTotalExpenses(expenses);
-      setTotalBudget(budget);
 
       const previousIncome = prevTxs
         .filter((t) => t.type === "income")
@@ -120,8 +141,9 @@ export default function DashboardPage() {
 
       setChangeSummary(highlight);
 
-      const categoryMap = new Map(cats.map((c) => [c.id, c]));
-      const budgetMap = new Map(buds.map((b) => [b.categoryId, b.limitCents]));
+      const categoryMap = new Map(
+        cats.map((c) => [c.id, { ...c, rolloverEnabled: c.rolloverEnabled ?? false }])
+      );
 
       const categorySpending = new Map<string, number>();
       txs
@@ -138,6 +160,34 @@ export default function DashboardPage() {
           const current = previousCategorySpending.get(t.categoryId) || 0;
           previousCategorySpending.set(t.categoryId, current + t.amountCents);
         });
+
+      const carryoverByCategory = new Map<string, number>();
+      prevBuds.forEach((budget) => {
+        const category = categoryMap.get(budget.categoryId);
+        if (!category?.rolloverEnabled) {
+          return;
+        }
+        const spent = previousCategorySpending.get(budget.categoryId) || 0;
+        const remaining = budget.limitCents - spent;
+        if (remaining > 0) {
+          carryoverByCategory.set(budget.categoryId, remaining);
+        }
+      });
+
+      const budgetMap = new Map(
+        buds.map((budget) => {
+          const category = categoryMap.get(budget.categoryId);
+          const carryover = category?.rolloverEnabled
+            ? carryoverByCategory.get(budget.categoryId) || 0
+            : 0;
+          return [budget.categoryId, budget.limitCents + carryover] as const;
+        })
+      );
+
+      const effectiveBudgetTotal =
+        monthBudget?.limitCents ??
+        Array.from(budgetMap.values()).reduce((sum, value) => sum + value, 0);
+      setTotalBudget(effectiveBudgetTotal);
 
       const topCats: CategorySpending[] = Array.from(categorySpending.entries())
         .map(([categoryId, amountCents]) => {
@@ -180,16 +230,17 @@ export default function DashboardPage() {
       const overBudget = buds
         .map((budgetItem) => {
           const spent = categorySpending.get(budgetItem.categoryId) || 0;
-          if (spent <= budgetItem.limitCents) {
+          const effectiveLimit = budgetMap.get(budgetItem.categoryId) ?? budgetItem.limitCents;
+          if (spent <= effectiveLimit) {
             return null;
           }
           const category = categoryMap.get(budgetItem.categoryId);
           return {
             categoryId: budgetItem.categoryId,
             categoryName: category?.name || "Uncategorized",
-            overByCents: spent - budgetItem.limitCents,
+            overByCents: spent - effectiveLimit,
             spentCents: spent,
-            budgetCents: budgetItem.limitCents,
+            budgetCents: effectiveLimit,
             color: category?.color || undefined,
           };
         })
@@ -228,12 +279,88 @@ export default function DashboardPage() {
     loadDashboardData();
   }, [loadDashboardData]);
 
+  useEffect(() => {
+    if (!quickAddCategoryId && categories.length > 0) {
+      setQuickAddCategoryId(categories[0].id);
+    }
+  }, [categories, quickAddCategoryId]);
+
   function handleQuickAdd() {
     router.push("/transactions/new");
   }
 
   function handleTransactionClick(transaction: Transaction) {
     router.push(`/transactions/${transaction.id}`);
+  }
+
+  function getTemplateDate(month: string, dayOfMonth: number): string {
+    const lastDay = Number(getMonthEnd(month).slice(-2));
+    const day = Math.min(Math.max(dayOfMonth, 1), lastDay);
+    return `${month}-${String(day).padStart(2, "0")}`;
+  }
+
+  async function handleQuickAddSubmit(event: FormEvent) {
+    event.preventDefault();
+    setQuickAddError("");
+
+    const amountCents = parseCentsInput(quickAddAmount);
+    if (amountCents === null || amountCents <= 0) {
+      setQuickAddError("Enter a valid amount.");
+      return;
+    }
+    if (!quickAddCategoryId) {
+      setQuickAddError("Choose a category.");
+      return;
+    }
+
+    try {
+      setQuickAddSaving(true);
+      const provider = getDataProvider();
+      const today = new Date().toISOString().slice(0, 10);
+      await provider.transactions.add({
+        type: quickAddType,
+        amountCents,
+        date: today,
+        categoryId: quickAddCategoryId,
+        accountId: quickAddAccountId || null,
+        merchant: quickAddMerchant.trim() || null,
+        note: null,
+      });
+      setQuickAddAmount("");
+      setQuickAddMerchant("");
+      await loadDashboardData();
+    } catch (error) {
+      console.error("Failed to quick add transaction:", error);
+      setQuickAddError("Quick add failed. Try again.");
+    } finally {
+      setQuickAddSaving(false);
+    }
+  }
+
+  async function handlePostTemplate(template: RecurringTemplate) {
+    if (!template.isActive || template.lastPostedMonth === monthKey) {
+      return;
+    }
+
+    try {
+      const provider = getDataProvider();
+      const date = getTemplateDate(monthKey, template.dayOfMonth);
+      await provider.transactions.add({
+        type: template.type,
+        amountCents: template.amountCents,
+        date,
+        categoryId: template.categoryId,
+        accountId: template.accountId ?? null,
+        merchant: template.merchant ?? null,
+        note: template.note ?? null,
+      });
+      await provider.recurringTemplates.update(template.id, {
+        lastPostedMonth: monthKey,
+      });
+      await loadDashboardData();
+    } catch (error) {
+      console.error("Failed to post recurring template:", error);
+    }
   }
 
   if (loading) {
@@ -248,6 +375,32 @@ export default function DashboardPage() {
   const budgetRemaining = totalBudget - totalExpenses;
   const budgetUsedPercent = totalBudget > 0 ? Math.round((totalExpenses / totalBudget) * 100) : 0;
   const overBudget = totalBudget > 0 && totalExpenses > totalBudget;
+  const daysInMonth = Number(getMonthEnd(monthKey).slice(-2));
+  const isCurrentMonth = monthKey === currentMonthKey;
+  const daysElapsed = isCurrentMonth ? Math.min(new Date().getDate(), daysInMonth) : daysInMonth;
+  const effectiveAverageMode = isCurrentMonth ? averageDailyMode : "month";
+  const averageDailySpendCents =
+    (effectiveAverageMode === "elapsed" ? daysElapsed : daysInMonth) > 0
+      ? Math.round(
+          totalExpenses /
+            (effectiveAverageMode === "elapsed" ? daysElapsed : daysInMonth)
+        )
+      : 0;
+  const averageDailyLabel =
+    effectiveAverageMode === "elapsed" ? "Based on days so far" : "Across the full month";
+  const projectedSpendCents =
+    isCurrentMonth && daysElapsed > 0
+      ? Math.round((totalExpenses / daysElapsed) * daysInMonth)
+      : totalExpenses;
+  const projectedRemainingCents = totalBudget > 0 ? totalBudget - projectedSpendCents : 0;
+  const chartTooltipStyle = {
+    backgroundColor: "var(--tooltip-bg)",
+    border: "1px solid var(--tooltip-border)",
+    borderRadius: "0.5rem",
+    color: "var(--tooltip-text)",
+  };
+  const chartTooltipLabelStyle = { color: "var(--tooltip-text)" };
+  const chartTooltipItemStyle = { color: "var(--tooltip-text)" };
   const budgetChartData =
     totalBudget > 0
       ? [
@@ -262,7 +415,22 @@ export default function DashboardPage() {
       : changeSummary.deltaCents <= 0
     : true;
   const changeDirection = changeSummary && changeSummary.deltaCents >= 0 ? "up" : "down";
-  const changeColor = changeIsPositive ? "text-green-600" : "text-red-600";
+  const changeColor = changeIsPositive ? "text-[var(--positive)]" : "text-[var(--danger)]";
+  const quickAddCategoryOptions: SelectOption[] = categories.map((category) => ({
+    value: category.id,
+    label: category.name,
+  }));
+  const quickAddAccountOptions: SelectOption[] = [
+    { value: "", label: "No account" },
+    ...accounts.map((account) => ({
+      value: account.id,
+      label: account.name,
+    })),
+  ];
+  const activeTemplates = recurringTemplates.filter((template) => template.isActive);
+  const pendingTemplates = activeTemplates.filter(
+    (template) => template.lastPostedMonth !== monthKey
+  );
 
   return (
     <AppLayout>
@@ -294,7 +462,124 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <MonthlySummary totalIncome={totalIncome} totalExpenses={totalExpenses} totalBudget={totalBudget} />
+        <Card className="md:hidden">
+          <CardHeader>
+            <CardTitle>Widget Preview</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] p-3">
+                <p className="text-[var(--muted)]">Income</p>
+                <p className="mt-1 font-semibold text-[var(--positive)]">
+                  {formatCents(totalIncome)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] p-3">
+                <p className="text-[var(--muted)]">Expenses</p>
+                <p className="mt-1 font-semibold text-[var(--danger)]">
+                  {formatCents(totalExpenses)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] p-3">
+                <p className="text-[var(--muted)]">Net</p>
+                <p className="mt-1 font-semibold text-[var(--ink)]">
+                  {formatCents(totalIncome - totalExpenses)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-strong)] p-3">
+                <p className="text-[var(--muted)]">Budget Left</p>
+                <p
+                  className={`mt-1 font-semibold ${
+                    budgetRemaining >= 0 ? "text-[var(--positive)]" : "text-[var(--danger)]"
+                  }`}
+                >
+                  {formatCents(budgetRemaining)}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Quick Add</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleQuickAddSubmit} className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={quickAddType === "expense" ? "primary" : "secondary"}
+                  onClick={() => setQuickAddType("expense")}
+                >
+                  Expense
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={quickAddType === "income" ? "primary" : "secondary"}
+                  onClick={() => setQuickAddType("income")}
+                >
+                  Income
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <Input
+                  label="Amount"
+                  type="number"
+                  step="0.01"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={quickAddAmount}
+                  onChange={(e) => setQuickAddAmount(e.target.value)}
+                />
+                <Select
+                  label="Category"
+                  options={quickAddCategoryOptions}
+                  value={quickAddCategoryId}
+                  onChange={(e) => setQuickAddCategoryId(e.target.value)}
+                  placeholder="Select category"
+                />
+                <Select
+                  label="Account"
+                  options={quickAddAccountOptions}
+                  value={quickAddAccountId}
+                  onChange={(e) => setQuickAddAccountId(e.target.value)}
+                />
+                <Input
+                  label="Merchant"
+                  placeholder="Optional"
+                  value={quickAddMerchant}
+                  onChange={(e) => setQuickAddMerchant(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                {quickAddError ? (
+                  <p className="text-sm text-[var(--danger)]">{quickAddError}</p>
+                ) : (
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    Adds today&apos;s transaction.
+                  </span>
+                )}
+                <Button type="submit" disabled={quickAddSaving}>
+                  {quickAddSaving ? "Saving..." : "Add Transaction"}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
+        <MonthlySummary
+          totalIncome={totalIncome}
+          totalExpenses={totalExpenses}
+          totalBudget={totalBudget}
+          averageDailySpendCents={averageDailySpendCents}
+          averageDailySpendLabel={averageDailyLabel}
+          averageDailySpendMode={effectiveAverageMode}
+          showAverageDailyToggle={isCurrentMonth}
+          onAverageDailySpendModeChange={setAverageDailyMode}
+        />
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <Card>
@@ -305,7 +590,7 @@ export default function DashboardPage() {
               {totalBudget > 0 ? (
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                   <div className="h-32 w-32">
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={120}>
                       <PieChart>
                         <Pie
                           data={budgetChartData}
@@ -317,18 +602,21 @@ export default function DashboardPage() {
                           {budgetChartData.map((entry, index) => (
                             <Cell
                               key={entry.name}
-                              fill={index === 0 ? (overBudget ? "#ef4444" : "#0f6b5a") : "#e5e7eb"}
+                              fill={
+                                index === 0
+                                  ? overBudget
+                                    ? "var(--danger)"
+                                    : "var(--accent)"
+                                  : "var(--surface-strong)"
+                              }
                             />
                           ))}
                         </Pie>
                         <Tooltip
                           formatter={(value) => formatCents(Number(value))}
-                          contentStyle={{
-                            backgroundColor: "var(--tooltip-bg)",
-                            border: "1px solid var(--tooltip-border)",
-                            borderRadius: "0.5rem",
-                          }}
-                          labelStyle={{ color: "var(--tooltip-text)" }}
+                          contentStyle={chartTooltipStyle}
+                          labelStyle={chartTooltipLabelStyle}
+                          itemStyle={chartTooltipItemStyle}
                         />
                       </PieChart>
                     </ResponsiveContainer>
@@ -340,7 +628,25 @@ export default function DashboardPage() {
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       Spent {formatCents(totalExpenses)} of {formatCents(totalBudget)}
                     </p>
-                    <p className={`text-sm font-medium ${overBudget ? "text-red-600" : "text-green-600"}`}>
+                    {isCurrentMonth && totalExpenses > 0 && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Projected spend {formatCents(projectedSpendCents)}
+                        {totalBudget > 0 && (
+                          <span className="ml-2">
+                            (
+                            {projectedRemainingCents >= 0
+                              ? `${formatCents(projectedRemainingCents)} left`
+                              : `${formatCents(Math.abs(projectedRemainingCents))} over`}
+                            )
+                          </span>
+                        )}
+                      </p>
+                    )}
+                    <p
+                      className={`text-sm font-medium ${
+                        overBudget ? "text-[var(--danger)]" : "text-[var(--positive)]"
+                      }`}
+                    >
                       {overBudget
                         ? `Over by ${formatCents(Math.abs(budgetRemaining))}`
                         : `${formatCents(budgetRemaining)} remaining`}
@@ -392,24 +698,21 @@ export default function DashboardPage() {
             <CardContent>
               {dailySpend.length > 0 ? (
                 <div className="h-32">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={120}>
                     <LineChart data={dailySpend}>
                       <Line
                         type="monotone"
                         dataKey="spentCents"
-                        stroke="#0f6b5a"
+                        stroke="var(--accent)"
                         strokeWidth={2}
                         dot={false}
                       />
                       <Tooltip
                         formatter={(value) => formatCents(Number(value))}
                         labelFormatter={(label) => `Day ${label}`}
-                        contentStyle={{
-                          backgroundColor: "var(--tooltip-bg)",
-                          border: "1px solid var(--tooltip-border)",
-                          borderRadius: "0.5rem",
-                        }}
-                        labelStyle={{ color: "var(--tooltip-text)" }}
+                        contentStyle={chartTooltipStyle}
+                        labelStyle={chartTooltipLabelStyle}
+                        itemStyle={chartTooltipItemStyle}
                       />
                     </LineChart>
                   </ResponsiveContainer>
@@ -432,7 +735,57 @@ export default function DashboardPage() {
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Recurring Templates</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {activeTemplates.length > 0 ? (
+                <div className="space-y-3">
+                  {activeTemplates.map((template) => {
+                    const isPosted = template.lastPostedMonth === monthKey;
+                    const category = categories.find((cat) => cat.id === template.categoryId);
+                    return (
+                      <div key={template.id} className="flex items-center justify-between text-sm">
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                            {template.merchant || category?.name || "Recurring"}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Day {template.dayOfMonth} • {template.type}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-semibold text-gray-900 dark:text-gray-100">
+                            {formatCents(template.amountCents)}
+                          </span>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={isPosted}
+                            onClick={() => handlePostTemplate(template)}
+                          >
+                            {isPosted ? "Posted" : "Post"}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {pendingTemplates.length === 0 && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      All templates posted for this month.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  No active templates yet.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Alerts</CardTitle>
@@ -462,7 +815,7 @@ export default function DashboardPage() {
                               {alert.categoryName}
                             </span>
                           </div>
-                          <span className="font-semibold text-red-600">
+                          <span className="font-semibold text-[var(--danger)]">
                             {formatCents(alert.overByCents)} over
                           </span>
                         </div>

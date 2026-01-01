@@ -3,6 +3,7 @@ import {
   Budget,
   Category,
   MonthlyBudget,
+  RecurringTemplate,
   db,
   SCHEMA_VERSION,
   Transaction,
@@ -15,6 +16,7 @@ export interface ExportPayload {
   exportedAt: string;
   transactions: Transaction[];
   categories: Category[];
+  recurringTemplates: RecurringTemplate[];
   budgets: Budget[];
   monthlyBudgets: MonthlyBudget[];
   accounts: Account[];
@@ -22,9 +24,18 @@ export interface ExportPayload {
 }
 
 export async function exportJson(): Promise<ExportPayload> {
-  const [transactions, categories, budgets, monthlyBudgets, accounts, settings] = await Promise.all([
+  const [
+    transactions,
+    categories,
+    recurringTemplates,
+    budgets,
+    monthlyBudgets,
+    accounts,
+    settings,
+  ] = await Promise.all([
     db.transactions.toArray(),
     db.categories.toArray(),
+    db.recurringTemplates.toArray(),
     db.budgets.toArray(),
     db.monthlyBudgets.toArray(),
     db.accounts.toArray(),
@@ -36,6 +47,7 @@ export async function exportJson(): Promise<ExportPayload> {
     exportedAt: new Date().toISOString(),
     transactions,
     categories,
+    recurringTemplates,
     budgets,
     monthlyBudgets,
     accounts,

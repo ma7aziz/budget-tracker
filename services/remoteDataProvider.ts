@@ -5,6 +5,7 @@ import type {
   BudgetRepository,
   MonthlyBudgetRepository,
   AccountRepository,
+  RecurringTemplateRepository,
   SettingsRepository,
 } from "./dataProvider";
 import type { ExportPayload } from "../utils/exportJson";
@@ -67,6 +68,14 @@ const makeAccounts = (): AccountRepository => ({
   list: () => notImplemented("accounts.list"),
 });
 
+const makeRecurringTemplates = (): RecurringTemplateRepository => ({
+  add: () => notImplemented("recurringTemplates.add"),
+  get: (id) => notImplemented(`recurringTemplates.get:${id}`),
+  update: (id) => notImplemented(`recurringTemplates.update:${id}`),
+  delete: (id) => notImplemented(`recurringTemplates.delete:${id}`),
+  list: () => notImplemented("recurringTemplates.list"),
+});
+
 const makeSettings = (): SettingsRepository => ({
   get: () => notImplemented("settings.get"),
   set: () => notImplemented("settings.set"),
@@ -81,6 +90,7 @@ export function createRemoteDataProvider(): DataProvider {
     budgets: makeBudgets(),
     monthlyBudgets: makeMonthlyBudgets(),
     accounts: makeAccounts(),
+    recurringTemplates: makeRecurringTemplates(),
     settings: makeSettings(),
     exportJson: () => notImplemented<ExportPayload>("exportJson"),
     importJson: () => notImplemented<ImportReport>("importJson"),

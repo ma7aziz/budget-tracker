@@ -44,6 +44,13 @@ import {
   listAccounts,
   updateAccount,
 } from "../db/accounts";
+import {
+  addRecurringTemplate,
+  deleteRecurringTemplate,
+  getRecurringTemplate,
+  listRecurringTemplates,
+  updateRecurringTemplate,
+} from "../db/recurringTemplates";
 import { getSettings, resetSettings, setSettings } from "../db/settings";
 import { exportJson } from "../utils/exportJson";
 import { importJson } from "../utils/importJson";
@@ -98,6 +105,13 @@ export function createLocalDataProvider(): DataProvider {
       update: updateAccount,
       delete: deleteAccount,
       list: listAccounts,
+    },
+    recurringTemplates: {
+      add: addRecurringTemplate,
+      get: getRecurringTemplate,
+      update: updateRecurringTemplate,
+      delete: deleteRecurringTemplate,
+      list: listRecurringTemplates,
     },
     settings: {
       get: getSettings,

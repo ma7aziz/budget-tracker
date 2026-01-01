@@ -66,6 +66,7 @@ export async function ensureDemoData(): Promise<boolean> {
         color: seed.color,
         parentId: null,
         order: index + 1,
+        rolloverEnabled: false,
       })
     );
   }

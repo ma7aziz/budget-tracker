@@ -10,7 +10,7 @@ export function FloatingActionButton({ icon, className = "", ...props }: Floatin
       className={`
         fixed bottom-20 right-6 z-50 md:bottom-6
         w-14 h-14 rounded-full
-        bg-[var(--accent)] text-white
+        bg-[var(--accent)] text-[var(--accent-contrast)]
         shadow-[var(--shadow-soft)] hover:shadow-[var(--shadow)]
         hover:bg-[var(--accent-strong)]
         active:scale-90

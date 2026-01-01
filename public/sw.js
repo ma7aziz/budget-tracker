@@ -5,8 +5,7 @@ const RUNTIME_CACHE = `budget-tracker-runtime-${CACHE_VERSION}`;
 const APP_SHELL = [
   "/",
   "/manifest.json",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
+  "/logos/logo.png",
   "/ios-install.html",
 ];
 

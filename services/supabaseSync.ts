@@ -6,6 +6,7 @@ import {
   type Budget,
   type Category,
   type MonthlyBudget,
+  type RecurringTemplate,
   type Transaction,
   type SyncTable,
 } from "../db/schema";
@@ -34,6 +35,7 @@ type RemoteCategory = {
   parent_id: string | null;
   order: number;
   color: string | null;
+  rollover_enabled: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -73,6 +75,23 @@ type RemoteSettings = {
   locale: string;
   week_start: number;
   theme: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type RemoteRecurringTemplate = {
+  id: string;
+  user_id: string;
+  type: "expense" | "income";
+  amount_cents: number;
+  category_id: string;
+  account_id: string | null;
+  merchant: string | null;
+  note: string | null;
+  cadence: "monthly";
+  day_of_month: number;
+  is_active: boolean;
+  last_posted_month: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -125,6 +144,7 @@ const mapCategoryToRemote = (category: Category, userId: string): RemoteCategory
   parent_id: category.parentId ?? null,
   order: category.order,
   color: category.color ?? null,
+  rollover_enabled: category.rolloverEnabled ?? false,
   created_at: ensureTimestamp(category.createdAt),
   updated_at: ensureTimestamp(category.updatedAt),
 });
@@ -135,6 +155,7 @@ const mapRemoteToCategory = (row: RemoteCategory): Category => ({
   parentId: row.parent_id,
   order: row.order,
   color: row.color,
+  rolloverEnabled: row.rollover_enabled ?? false,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -216,6 +237,42 @@ const mapRemoteToSettings = (row: RemoteSettings) => ({
   locale: row.locale,
   weekStart: row.week_start,
   theme: row.theme,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+const mapRecurringTemplateToRemote = (
+  template: RecurringTemplate,
+  userId: string
+): RemoteRecurringTemplate => ({
+  id: template.id,
+  user_id: userId,
+  type: template.type,
+  amount_cents: template.amountCents,
+  category_id: template.categoryId,
+  account_id: template.accountId ?? null,
+  merchant: template.merchant ?? null,
+  note: template.note ?? null,
+  cadence: template.cadence,
+  day_of_month: template.dayOfMonth,
+  is_active: template.isActive,
+  last_posted_month: template.lastPostedMonth ?? null,
+  created_at: ensureTimestamp(template.createdAt),
+  updated_at: ensureTimestamp(template.updatedAt),
+});
+
+const mapRemoteToRecurringTemplate = (row: RemoteRecurringTemplate): RecurringTemplate => ({
+  id: row.id,
+  type: row.type,
+  amountCents: row.amount_cents,
+  categoryId: row.category_id,
+  accountId: row.account_id,
+  merchant: row.merchant,
+  note: row.note,
+  cadence: row.cadence,
+  dayOfMonth: row.day_of_month,
+  isActive: row.is_active,
+  lastPostedMonth: row.last_posted_month,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -344,6 +401,25 @@ async function mergeAccounts(remote: RemoteAccount[], local: Account[]): Promise
   }
 }
 
+async function mergeRecurringTemplates(
+  remote: RemoteRecurringTemplate[],
+  local: RecurringTemplate[]
+): Promise<void> {
+  const localMap = new Map(local.map((item) => [item.id, item]));
+  const updates: RecurringTemplate[] = [];
+
+  for (const row of remote) {
+    const localItem = localMap.get(row.id);
+    if (!localItem || toEpoch(row.updated_at) > toEpoch(localItem.updatedAt)) {
+      updates.push(mapRemoteToRecurringTemplate(row));
+    }
+  }
+
+  if (updates.length > 0) {
+    await db.recurringTemplates.bulkPut(updates);
+  }
+}
+
 async function mergeSettings(remote: RemoteSettings[], local: { updatedAt?: string } | undefined): Promise<void> {
   if (remote.length === 0) {
     return;
@@ -461,6 +537,32 @@ async function pushAccounts(userId: string, remote: RemoteAccount[], local: Acco
   }
 }
 
+async function pushRecurringTemplates(
+  userId: string,
+  remote: RemoteRecurringTemplate[],
+  local: RecurringTemplate[]
+): Promise<void> {
+  const remoteMap = new Map(remote.map((row) => [row.id, row]));
+  const payload: RemoteRecurringTemplate[] = [];
+
+  for (const item of local) {
+    const remoteItem = remoteMap.get(item.id);
+    if (!remoteItem || toEpoch(item.updatedAt) > toEpoch(remoteItem.updated_at)) {
+      payload.push(mapRecurringTemplateToRemote(item, userId));
+    }
+  }
+
+  if (payload.length > 0) {
+    const supabase = getSupabaseClient();
+    const { error } = await supabase
+      .from("recurring_templates")
+      .upsert(payload, { onConflict: "id" });
+    if (error) {
+      throw error;
+    }
+  }
+}
+
 async function pushSettings(userId: string, remote: RemoteSettings[], local: { currency: string; locale: string; weekStart: number; theme: string; createdAt?: string; updatedAt?: string }): Promise<void> {
   const existing = remote[0];
   const payload = mapSettingsToRemote(local, userId, existing?.id);
@@ -515,13 +617,14 @@ export async function syncAll(): Promise<void> {
     remoteBudgets,
     remoteMonthlyBudgets,
     remoteAccounts,
+    remoteRecurringTemplates,
     remoteSettings,
   ] = await Promise.all([
     fetchRemoteTransactions(userId),
     fetchRemote<RemoteCategory>(
       "categories",
       userId,
-      "id,user_id,name,parent_id,order,color,created_at,updated_at"
+      "id,user_id,name,parent_id,order,color,rollover_enabled,created_at,updated_at"
     ),
     fetchRemote<RemoteBudget>(
       "budgets",
@@ -538,6 +641,11 @@ export async function syncAll(): Promise<void> {
       userId,
       "id,user_id,name,type,created_at,updated_at"
     ),
+    fetchRemote<RemoteRecurringTemplate>(
+      "recurring_templates",
+      userId,
+      "id,user_id,type,amount_cents,category_id,account_id,merchant,note,cadence,day_of_month,is_active,last_posted_month,created_at,updated_at"
+    ),
     fetchRemote<RemoteSettings>(
       "settings",
       userId,
@@ -551,6 +659,7 @@ export async function syncAll(): Promise<void> {
     localBudgets,
     localMonthlyBudgets,
     localAccounts,
+    localRecurringTemplates,
     localSettings,
   ] = await Promise.all([
     db.transactions.toArray(),
@@ -558,6 +667,7 @@ export async function syncAll(): Promise<void> {
     db.budgets.toArray(),
     db.monthlyBudgets.toArray(),
     db.accounts.toArray(),
+    db.recurringTemplates.toArray(),
     db.settings.get(SETTINGS_ID),
   ]);
 
@@ -566,6 +676,7 @@ export async function syncAll(): Promise<void> {
   await mergeBudgets(remoteBudgets, localBudgets);
   await mergeMonthlyBudgets(remoteMonthlyBudgets, localMonthlyBudgets);
   await mergeAccounts(remoteAccounts, localAccounts);
+  await mergeRecurringTemplates(remoteRecurringTemplates, localRecurringTemplates);
   await mergeSettings(remoteSettings, localSettings);
 
   await pushCategories(userId, remoteCategories, localCategories);
@@ -573,6 +684,7 @@ export async function syncAll(): Promise<void> {
   await pushBudgets(userId, remoteBudgets, localBudgets);
   await pushMonthlyBudgets(userId, remoteMonthlyBudgets, localMonthlyBudgets);
   await pushTransactions(userId, remoteTransactions, localTransactions);
+  await pushRecurringTemplates(userId, remoteRecurringTemplates, localRecurringTemplates);
 
   const currentSettings = await db.settings.get(SETTINGS_ID);
   if (currentSettings) {

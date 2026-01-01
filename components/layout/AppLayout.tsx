@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { ReactNode } from "react";
 import { BottomNav } from "./BottomNav";
 import { Sidebar } from "./Sidebar";
@@ -15,7 +16,10 @@ export function AppLayout({ children }: AppLayoutProps) {
       <div className="flex-1 flex flex-col">
         <header className="md:hidden bg-[color:var(--surface)]/90 border-b border-[var(--border)] sticky top-0 z-30 safe-top backdrop-blur-lg">
           <div className="px-4 py-4">
-            <h1 className="text-xl font-semibold font-display text-[var(--accent)]">Budget Tracker</h1>
+            <div className="flex items-center gap-3">
+              <Image src="/logos/logo.png" alt="Budget Tracker" width={36} height={36} />
+              <h1 className="text-xl font-semibold font-display text-[var(--ink)]">Budget Tracker</h1>
+            </div>
           </div>
         </header>
         <main className="flex-1 pb-20 md:pb-0 smooth-scroll">

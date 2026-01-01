@@ -117,16 +117,27 @@ export default function AnalyticsPage() {
 
   const [totalIncome, setTotalIncome] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
+  const chartTooltipStyle = {
+    backgroundColor: "var(--tooltip-bg)",
+    border: "1px solid var(--tooltip-border)",
+    borderRadius: "0.5rem",
+    color: "var(--tooltip-text)",
+  };
+  const chartTooltipLabelStyle = { color: "var(--tooltip-text)" };
+  const chartTooltipItemStyle = { color: "var(--tooltip-text)" };
+  const chartLegendStyle = { paddingTop: "20px", color: "var(--muted)" };
 
   const loadAnalyticsData = useCallback(async () => {
     try {
       setLoading(true);
       const provider = getDataProvider();
+      const previousMonthKey = getPreviousMonthKey(monthKey);
 
-      const [txs, cats, buds] = await Promise.all([
+      const [txs, cats, buds, prevBuds] = await Promise.all([
         provider.transactions.list(),
         provider.categories.list(),
         provider.budgets.listForMonth(monthKey),
+        provider.budgets.listForMonth(previousMonthKey),
       ]);
 
       setTransactions(txs);
@@ -134,10 +145,11 @@ export default function AnalyticsPage() {
       setBudgets(buds);
 
       const monthTxs = txs.filter((t) => t.date.startsWith(monthKey));
-      const previousMonthKey = getPreviousMonthKey(monthKey);
       const previousMonthTxs = txs.filter((t) => t.date.startsWith(previousMonthKey));
 
-      const categoryMap = new Map(cats.map((c) => [c.id, c]));
+      const categoryMap = new Map(
+        cats.map((c) => [c.id, { ...c, rolloverEnabled: c.rolloverEnabled ?? false }])
+      );
       const categorySpending = new Map<string, number>();
       const previousCategorySpending = new Map<string, number>();
 
@@ -160,6 +172,19 @@ export default function AnalyticsPage() {
           const current = previousCategorySpending.get(t.categoryId) || 0;
           previousCategorySpending.set(t.categoryId, current + t.amountCents);
         });
+
+      const carryoverByCategory = new Map<string, number>();
+      prevBuds.forEach((budget) => {
+        const category = categoryMap.get(budget.categoryId);
+        if (!category?.rolloverEnabled) {
+          return;
+        }
+        const spent = previousCategorySpending.get(budget.categoryId) || 0;
+        const remaining = budget.limitCents - spent;
+        if (remaining > 0) {
+          carryoverByCategory.set(budget.categoryId, remaining);
+        }
+      });
 
       setTotalIncome(income);
       setTotalExpenses(expenses);
@@ -326,13 +351,18 @@ export default function AnalyticsPage() {
 
       const utilizationData: BudgetUtilizationData[] = buds.map((budget) => {
         const spentCents = categorySpending.get(budget.categoryId) || 0;
-        const percent = budget.limitCents > 0 ? (spentCents / budget.limitCents) * 100 : 0;
         const category = categoryMap.get(budget.categoryId);
+        const carryover = category?.rolloverEnabled
+          ? carryoverByCategory.get(budget.categoryId) || 0
+          : 0;
+        const effectiveLimitCents = budget.limitCents + carryover;
+        const percent =
+          effectiveLimitCents > 0 ? (spentCents / effectiveLimitCents) * 100 : 0;
         return {
           categoryId: budget.categoryId,
           name: category?.name || "Unknown",
           spentCents,
-          budgetCents: budget.limitCents,
+          budgetCents: effectiveLimitCents,
           percent,
           color: category?.color || null,
         };
@@ -403,7 +433,7 @@ export default function AnalyticsPage() {
               <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Income</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCents(totalIncome)}</p>
+              <p className="text-2xl font-bold text-[var(--positive)]">{formatCents(totalIncome)}</p>
             </CardContent>
           </Card>
 
@@ -412,7 +442,7 @@ export default function AnalyticsPage() {
               <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Expenses</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCents(totalExpenses)}</p>
+              <p className="text-2xl font-bold text-[var(--danger)]">{formatCents(totalExpenses)}</p>
             </CardContent>
           </Card>
 
@@ -421,7 +451,11 @@ export default function AnalyticsPage() {
               <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Net Balance</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className={`text-2xl font-bold ${netBalance >= 0 ? "text-primary-600" : "text-red-600"}`}>
+              <p
+                className={`text-2xl font-bold ${
+                  netBalance >= 0 ? "text-[var(--positive)]" : "text-[var(--danger)]"
+                }`}
+              >
                 {formatCents(netBalance)}
               </p>
             </CardContent>
@@ -442,7 +476,7 @@ export default function AnalyticsPage() {
                   <CardTitle>Spending by Category</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={280} minWidth={0} minHeight={200}>
                     <PieChart>
                       <Pie
                         data={categoryData}
@@ -460,14 +494,11 @@ export default function AnalyticsPage() {
                       </Pie>
                       <Tooltip
                         formatter={(value) => formatCents(Number(value))}
-                        contentStyle={{
-                          backgroundColor: "var(--tooltip-bg)",
-                          border: "1px solid var(--tooltip-border)",
-                          borderRadius: "0.5rem",
-                        }}
-                        labelStyle={{ color: "var(--tooltip-text)" }}
+                        contentStyle={chartTooltipStyle}
+                        labelStyle={chartTooltipLabelStyle}
+                        itemStyle={chartTooltipItemStyle}
                       />
-                      <Legend wrapperStyle={{ paddingTop: "20px" }} />
+                      <Legend wrapperStyle={chartLegendStyle} />
                     </PieChart>
                   </ResponsiveContainer>
 
@@ -538,7 +569,7 @@ export default function AnalyticsPage() {
                   <CardTitle>Income vs Expenses (6 months)</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={280}>
+                  <ResponsiveContainer width="100%" height={280} minWidth={0} minHeight={200}>
                     <BarChart data={monthlyData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-700" />
                       <XAxis
@@ -553,16 +584,13 @@ export default function AnalyticsPage() {
                       />
                       <Tooltip
                         formatter={(value) => formatCents(Number(value))}
-                        contentStyle={{
-                          backgroundColor: "var(--tooltip-bg)",
-                          border: "1px solid var(--tooltip-border)",
-                          borderRadius: "0.5rem",
-                        }}
-                        labelStyle={{ color: "var(--tooltip-text)" }}
+                        contentStyle={chartTooltipStyle}
+                        labelStyle={chartTooltipLabelStyle}
+                        itemStyle={chartTooltipItemStyle}
                       />
-                      <Legend wrapperStyle={{ paddingTop: "20px" }} />
-                      <Bar dataKey="expenseCents" fill="#ef4444" name="Expenses" stackId="stack" />
-                      <Bar dataKey="incomeCents" fill="#10b981" name="Income" stackId="stack" />
+                      <Legend wrapperStyle={chartLegendStyle} />
+                      <Bar dataKey="expenseCents" fill="var(--danger)" name="Expenses" stackId="stack" />
+                      <Bar dataKey="incomeCents" fill="var(--positive)" name="Income" stackId="stack" />
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -584,7 +612,7 @@ export default function AnalyticsPage() {
                             <span className="text-xs text-gray-500">Last 6 months</span>
                           </div>
                           <div className="h-24">
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={80}>
                               <LineChart data={trend.data}>
                                 <Line
                                   type="monotone"
@@ -595,12 +623,9 @@ export default function AnalyticsPage() {
                                 />
                                 <Tooltip
                                   formatter={(value) => formatCents(Number(value))}
-                                  contentStyle={{
-                                    backgroundColor: "var(--tooltip-bg)",
-                                    border: "1px solid var(--tooltip-border)",
-                                    borderRadius: "0.5rem",
-                                  }}
-                                  labelStyle={{ color: "var(--tooltip-text)" }}
+                                  contentStyle={chartTooltipStyle}
+                                  labelStyle={chartTooltipLabelStyle}
+                                  itemStyle={chartTooltipItemStyle}
                                 />
                               </LineChart>
                             </ResponsiveContainer>
@@ -637,7 +662,9 @@ export default function AnalyticsPage() {
                         <tbody>
                           {momDeltas.map((row) => {
                             const isIncrease = row.deltaCents >= 0;
-                            const deltaColor = isIncrease ? "text-red-600" : "text-green-600";
+                            const deltaColor = isIncrease
+                              ? "text-[var(--danger)]"
+                              : "text-[var(--positive)]";
                             return (
                               <tr key={row.categoryId} className="border-t border-gray-100 dark:border-gray-800">
                                 <td className="py-2 text-gray-700 dark:text-gray-300">{row.name}</td>

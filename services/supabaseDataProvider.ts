@@ -120,6 +120,24 @@ export function createSupabaseDataProvider(): DataProvider {
       },
       list: local.accounts.list,
     },
+    recurringTemplates: {
+      add: async (input) => {
+        const result = await local.recurringTemplates.add(input);
+        triggerSync();
+        return result;
+      },
+      get: local.recurringTemplates.get,
+      update: async (id, updates) => {
+        const result = await local.recurringTemplates.update(id, updates);
+        triggerSync();
+        return result;
+      },
+      delete: async (id) => {
+        await local.recurringTemplates.delete(id);
+        triggerSync();
+      },
+      list: local.recurringTemplates.list,
+    },
     settings: {
       get: local.settings.get,
       set: async (updates) => {

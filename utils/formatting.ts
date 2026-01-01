@@ -1,8 +1,13 @@
-export function formatCents(cents: number, currency = "USD"): string {
+export function formatCents(
+  cents: number,
+  currency = "EGP",
+  locale = "en-EG"
+): string {
   const amount = cents / 100;
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
+    currencyDisplay: "code",
   }).format(amount);
 }
 
