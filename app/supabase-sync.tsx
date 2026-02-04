@@ -5,6 +5,7 @@ import { getDefaultDataProviderKind } from "@/services/dataProvider";
 import { getCurrentSession, onAuthStateChange } from "@/services/supabaseAuth";
 import { isSupabaseConfigured } from "@/services/supabaseClient";
 import { registerOnlineSync, triggerSync } from "@/services/supabaseSync";
+import { applySessionScope } from "@/services/userScope";
 
 export function SupabaseSyncListener() {
   useEffect(() => {
@@ -14,15 +15,21 @@ export function SupabaseSyncListener() {
 
     const unregisterOnline = registerOnlineSync();
     const unregisterAuth = onAuthStateChange((session) => {
-      if (session) {
-        triggerSync();
-      }
+      void (async () => {
+        await applySessionScope(session);
+        if (session) {
+          triggerSync();
+        }
+      })();
     });
 
     getCurrentSession().then((session) => {
-      if (session) {
-        triggerSync();
-      }
+      void (async () => {
+        await applySessionScope(session);
+        if (session) {
+          triggerSync();
+        }
+      })();
     });
 
     return () => {

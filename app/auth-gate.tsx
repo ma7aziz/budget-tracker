@@ -6,6 +6,7 @@ import { LoadingScreen } from "@/components/ui/Loading";
 import { getDefaultDataProviderKind } from "@/services/dataProvider";
 import { getCurrentSession, onAuthStateChange } from "@/services/supabaseAuth";
 import { isSupabaseConfigured } from "@/services/supabaseClient";
+import { applySessionScope } from "@/services/userScope";
 
 const AUTH_ROUTE = "/auth";
 
@@ -42,7 +43,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     let unsubscribe: () => void = () => undefined;
 
     getCurrentSession()
-      .then((session) => {
+      .then(async (session) => {
+        await applySessionScope(session);
         const authed = Boolean(session);
         setAuthorized(authed);
         if (!authed && pathname !== AUTH_ROUTE) {
@@ -52,11 +54,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       .finally(() => setChecking(false));
 
     unsubscribe = onAuthStateChange((session) => {
-      const authed = Boolean(session);
-      setAuthorized(authed);
-      if (!authed && pathname !== AUTH_ROUTE) {
-        router.replace(AUTH_ROUTE);
-      }
+      void (async () => {
+        await applySessionScope(session);
+        const authed = Boolean(session);
+        setAuthorized(authed);
+        if (!authed && pathname !== AUTH_ROUTE) {
+          router.replace(AUTH_ROUTE);
+        }
+      })();
     });
 
     return () => {

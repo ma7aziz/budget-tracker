@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Budget Tracker — Reset Service Worker</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #0b0b0b;
+        --fg: #f3f4f6;
+        --muted: #9ca3af;
+        --card: #111827;
+        --border: rgba(255, 255, 255, 0.12);
+        --btn: #14b8a6;
+        --btnfg: #062b26;
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #f9fafb;
+          --fg: #111827;
+          --muted: #6b7280;
+          --card: #ffffff;
+          --border: rgba(17, 24, 39, 0.12);
+          --btn: #0f766e;
+          --btnfg: #ffffff;
+        }
+      }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      .wrap {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 32px 16px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 18px 16px;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 6px;
+      }
+      p {
+        margin: 8px 0;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+      button {
+        border: 0;
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: var(--btn);
+        color: var(--btnfg);
+        font-weight: 650;
+        cursor: pointer;
+      }
+      pre {
+        margin: 12px 0 0;
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        overflow: auto;
+        font-size: 12px;
+        line-height: 1.4;
+        color: var(--fg);
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+      a {
+        color: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>Reset service worker + caches</h1>
+        <p>
+          Use this page if the app is stuck with <code>/_next</code> chunk/CSS 404s due to a stale
+          service worker cache.
+        </p>
+        <div class="row">
+          <button id="run">Reset Now</button>
+          <a href="/" id="home">Go to app</a>
+        </div>
+        <pre id="log">Ready.</pre>
+      </div>
+    </div>
+
+    <script>
+      const logEl = document.getElementById("log");
+      const btn = document.getElementById("run");
+      const home = document.getElementById("home");
+
+      const log = (line) => {
+        logEl.textContent = `${logEl.textContent}\n${line}`;
+      };
+
+      async function reset() {
+        logEl.textContent = "Resetting...";
+
+        try {
+          if ("serviceWorker" in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            log(`Service workers: ${regs.length}`);
+            await Promise.allSettled(regs.map((r) => r.unregister()));
+            log("Unregistered all service workers.");
+          } else {
+            log("No serviceWorker support.");
+          }
+
+          if ("caches" in window) {
+            const keys = await caches.keys();
+            log(`Cache keys: ${keys.length}`);
+            await Promise.allSettled(keys.map((k) => caches.delete(k)));
+            log("Cleared Cache Storage.");
+          } else {
+            log("No Cache Storage support.");
+          }
+
+          log("Done. Now hard refresh the app.");
+          home.textContent = "Open app (after refresh)";
+        } catch (e) {
+          log(`Failed: ${e && e.message ? e.message : String(e)}`);
+        }
+      }
+
+      btn.addEventListener("click", () => reset());
+      // Auto-run once so users don't have to click.
+      reset();
+    </script>
+  </body>
+</html>
+

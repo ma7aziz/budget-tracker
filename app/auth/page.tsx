@@ -16,6 +16,7 @@ import {
   signUpWithPassword,
 } from "@/services/supabaseAuth";
 import { triggerSync } from "@/services/supabaseSync";
+import { applySessionScope } from "@/services/userScope";
 
 export default function AuthPage() {
   const router = useRouter();
@@ -30,15 +31,21 @@ export default function AuthPage() {
 
     getCurrentSession()
       .then((session) => {
-        setCurrentUserEmail(session?.user?.email ?? null);
+        void (async () => {
+          await applySessionScope(session);
+          setCurrentUserEmail(session?.user?.email ?? null);
+        })();
       })
       .finally(() => setLoading(false));
 
     unsubscribe = onAuthStateChange((session) => {
       setCurrentUserEmail(session?.user?.email ?? null);
-      if (session) {
-        triggerSync();
-      }
+      void (async () => {
+        await applySessionScope(session);
+        if (session) {
+          triggerSync();
+        }
+      })();
     });
 
     return () => {
@@ -53,6 +60,7 @@ export default function AuthPage() {
     try {
       const session = await signInWithPassword({ email, password });
       setStatus("Signed in. Sync started.");
+      await applySessionScope(session);
       triggerSync();
       if (session) {
         router.replace("/");
@@ -78,6 +86,7 @@ export default function AuthPage() {
     setStatus(null);
     try {
       await signOut();
+      await applySessionScope(null);
       setStatus("Signed out.");
     } catch (error) {
       setStatus((error as Error).message);

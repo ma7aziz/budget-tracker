@@ -1,6 +1,8 @@
 import Dexie, { Table } from "dexie";
 
 export const SCHEMA_VERSION = 4;
+export const DEFAULT_DB_NAME = "budget-tracker";
+export const ANON_DB_NAME = `${DEFAULT_DB_NAME}-anon`;
 
 export type TransactionType = "expense" | "income";
 
@@ -120,8 +122,8 @@ export class BudgetTrackerDB extends Dexie {
   settings!: Table<SettingsRecord, string>;
   syncDeletes!: Table<SyncDelete, [string, string]>;
 
-  constructor() {
-    super("budget-tracker");
+  constructor(name: string = DEFAULT_DB_NAME) {
+    super(name);
 
     this.version(SCHEMA_VERSION).stores({
       transactions:
@@ -137,7 +139,66 @@ export class BudgetTrackerDB extends Dexie {
   }
 }
 
-export const db = new BudgetTrackerDB();
+function hasPublicEnv(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+const initialDbName =
+  typeof window !== "undefined" &&
+  hasPublicEnv(process.env.NEXT_PUBLIC_SUPABASE_URL) &&
+  hasPublicEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+    ? ANON_DB_NAME
+    : DEFAULT_DB_NAME;
+
+let activeDbName = initialDbName;
+export let db = new BudgetTrackerDB(activeDbName);
+
+let switchInFlight: Promise<void> | null = null;
+
+export function getActiveDbName(): string {
+  return activeDbName;
+}
+
+export function buildUserDbName(userId: string): string {
+  return `${DEFAULT_DB_NAME}-user-${userId}`;
+}
+
+export async function setActiveDbName(nextDbName: string): Promise<void> {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (!nextDbName || nextDbName === activeDbName) {
+    return;
+  }
+
+  if (switchInFlight) {
+    await switchInFlight;
+  }
+
+  switchInFlight = (async () => {
+    try {
+      db.close();
+    } catch {
+      // ignore
+    }
+
+    activeDbName = nextDbName;
+    db = new BudgetTrackerDB(activeDbName);
+
+    try {
+      await db.open();
+    } catch {
+      // ignore: Dexie opens lazily; failures will surface on actual operations.
+    }
+  })();
+
+  try {
+    await switchInFlight;
+  } finally {
+    switchInFlight = null;
+  }
+}
 
 export function generateId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {

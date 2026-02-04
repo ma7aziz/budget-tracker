@@ -13,6 +13,7 @@ import {
 import { clearSyncDelete, listSyncDeletes } from "../db/syncDeletes";
 import { getSupabaseClient, isSupabaseConfigured } from "./supabaseClient";
 import { getCurrentSession, getCurrentUserId } from "./supabaseAuth";
+import { applyUserScope } from "./userScope";
 
 type RemoteTransaction = {
   id: string;
@@ -610,6 +611,8 @@ export async function syncAll(): Promise<void> {
   if (!userId) {
     return;
   }
+
+  await applyUserScope(userId);
 
   const [
     remoteTransactions,
