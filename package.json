@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@opennextjs/cloudflare": "^1.14.10",
     "@supabase/supabase-js": "^2.45.0",
     "dexie": "^4.0.0",
     "lucide-react": "^0.562.0",
@@ -26,6 +27,7 @@
     "eslint-config-next": "^14.2.5",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "wrangler": "^4.105.0"
   }
 }
